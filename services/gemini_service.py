@@ -1,10 +1,7 @@
-"""
-Google Gemini API 연동 서비스 (Search Grounding, 멀티모달 파일 분석, 블로그 생성)
-"""
-
+import io
 import os
 import re
-from prompts.blog_templates import TONE_PRESETS, SYSTEM_PROMPT_TEMPLATE
+from prompts.blog_templates import TONE_PRESETS, SYSTEM_PROMPT_TEMPLATE, PROPERTY_PROMPT_TEMPLATE
 from services.file_parser import extract_text_from_file
 
 DEFAULT_MODEL = "gemini-3.5-flash"
@@ -41,7 +38,7 @@ def _format_office_info(config: dict) -> str:
     if not parts:
         return "포스팅 마지막 맺음말에 독자의 공감과 댓글/이웃 추가를 유도하는 따뜻한 마무리 인사를 작성하세요."
 
-    return "포스팅 마지막 맺음말 부분에 아래의 공인중개사 정보를 신뢰감 있고 친절하게 안내하며 독자의 상담/문의를 유도하세요:\n" + "\n".join(parts)
+    return "포스팅 마지막 맺음말 부분에 아래의 공인중개사 정보를 신뢰감 있고 친절하게 안내하며 독자의 상담/방문 예약을 유도하세요:\n" + "\n".join(parts)
 
 
 def _extract_titles(text: str) -> list:
@@ -95,6 +92,99 @@ def _extract_body(text: str) -> str:
     return cleaned.strip()
 
 
+def _get_image_mime(extension: str) -> str:
+    ext = extension.lower().replace(".", "")
+    if ext in ["jpg", "jpeg"]:
+        return "image/jpeg"
+    if ext == "png":
+        return "image/png"
+    if ext == "webp":
+        return "image/webp"
+    return f"image/{ext}"
+
+
+def _extract_images(file_paths: list) -> list:
+    """파일 목록에서 이미지 데이터 추출"""
+    image_parts = []
+    for path in file_paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            file_data = extract_text_from_file(path)
+            if file_data["type"] == "image":
+                mime = _get_image_mime(file_data["extension"])
+                image_parts.append({"mime_type": mime, "data": file_data["content"], "name": file_data["filename"]})
+        except Exception:
+            continue
+    return image_parts
+
+
+def _prepare_property_content(property_info: dict, topic: str, file_paths: list):
+    """매물 소개 모드 프롬프트 조립"""
+    p_info = property_info or {}
+    deal_type = p_info.get("deal_type", "매매/전세/월세")
+    p_type = p_info.get("property_type", "부동산 매물")
+    loc = p_info.get("location", "위치 미지정")
+    price = p_info.get("price", "협의 가능")
+    area = p_info.get("area_structure", "상세 면적 및 구조")
+    features = p_info.get("features", "")
+    memo = p_info.get("memo", topic)
+
+    prompt_lines = [
+        "다음 제공된 부동산 매물 스펙과 첨부된 현장 사진들을 면밀히 분석하여, 네이버 블로그에 최적화된 생생한 룸투어 매물 소개 포스팅을 작성해주세요.",
+        "",
+        "### [등록된 매물 정보]",
+        f"- **거래 형태**: {deal_type}",
+        f"- **매물 종류**: {p_type}",
+        f"- **소재지/위치**: {loc}",
+        f"- **가격 조건**: {price}",
+        f"- **면적 및 구조/층수**: {area}",
+    ]
+    if features:
+        prompt_lines.append(f"- **핵심 특장점 및 옵션**: {features}")
+    if memo:
+        prompt_lines.append(f"- **추가 전달 메모**: {memo}")
+
+    image_parts = _extract_images(file_paths)
+    if image_parts:
+        prompt_lines.append("")
+        prompt_lines.append(f"### [현장 사진 안내 (총 {len(image_parts)}장)]")
+        prompt_lines.append("첨부된 사진들의 순서(사진 1, 사진 2, ...)를 파악하여, 각 사진에 담긴 공간(외관, 거실, 주방, 룸, 욕실, 뷰 등)의 실제 시각적 장점을 본문 곳곳에 `[📸 사진 1: 거실 - ...]` 형식의 사진 플레이스홀더와 함께 자세히 서술해주세요.")
+        return ["\n".join(prompt_lines)] + image_parts
+
+    return "\n".join(prompt_lines)
+
+
+def _prepare_file_content(file_paths: list, topic: str):
+    """일반 문서/첨부파일 모드 프롬프트 조립"""
+    image_parts = []
+    text_docs = []
+
+    for path in file_paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            file_data = extract_text_from_file(path)
+            if file_data["type"] == "image":
+                mime = _get_image_mime(file_data["extension"])
+                image_parts.append({"mime_type": mime, "data": file_data["content"], "name": file_data["filename"]})
+            else:
+                text_docs.append(f"--- [파일: {file_data['filename']}] ---\n{file_data['content'][:12000]}")
+        except Exception as e:
+            text_docs.append(f"[파일 {os.path.basename(path)} 읽기 오류: {e}]")
+
+    topic_text = topic if topic else "첨부된 자료의 핵심 내용을 분석하여 네이버 블로그 부동산 브리핑 글을 작성해주세요."
+    prompt_header = f"다음 제공된 첨부 자료와 요청 주제를 정밀 분석하여 네이버 블로그 글을 작성해주세요.\n\n[요청 주제 및 메모]:\n{topic_text}"
+
+    if text_docs:
+        prompt_header += "\n\n[첨부 문서 본문 내용]:\n" + "\n\n".join(text_docs)
+
+    if image_parts:
+        return [prompt_header] + image_parts
+
+    return prompt_header
+
+
 class GeminiBlogService:
     def __init__(self, api_key: str = "", model_name: str = DEFAULT_MODEL):
         self.api_key = api_key
@@ -112,35 +202,27 @@ class GeminiBlogService:
     def set_model(self, model_name: str):
         self.model_name = self._sanitize_model_name(model_name)
 
-    def _build_system_prompt(self, tone_key: str, config: dict) -> str:
+    def _build_system_prompt(self, tone_key: str, config: dict, is_property: bool = False) -> str:
         """선택된 톤앤매너 및 사무소 정보로 시스템 프롬프트 조립"""
         tone_info = TONE_PRESETS.get(tone_key, TONE_PRESETS["neighbor"])
         tone_instruction = tone_info["instruction"] + _format_emoji_instruction(config.get("emoji_density", "normal"))
         office_instruction = _format_office_info(config)
 
-        return SYSTEM_PROMPT_TEMPLATE.format(
+        template = PROPERTY_PROMPT_TEMPLATE if is_property else SYSTEM_PROMPT_TEMPLATE
+        return template.format(
             tone_instruction=tone_instruction,
             office_info_instruction=office_instruction
         )
 
-    def _prepare_user_content(self, mode: str, topic: str, file_path: str = None):
-        """작성 모드에 따른 사용자 프롬프트 및 파일 데이터 구성"""
-        if mode == "file" and file_path:
-            file_data = extract_text_from_file(file_path)
-            if file_data["type"] == "image":
-                mime = "image/jpeg" if file_data["extension"] == ".jpg" else f"image/{file_data['extension'].replace('.', '')}"
-                topic_text = topic if topic else "첨부된 자료의 핵심 내용을 분석하여 부동산 브리핑 글을 작성해주세요."
-                return [
-                    f"다음 제공된 이미지/자료와 요청 주제를 정밀 분석하여 네이버 블로그 글을 작성해주세요.\n\n[요청 주제 및 메모]:\n{topic_text}",
-                    {"mime_type": mime, "data": file_data["content"]}
-                ]
-            
-            topic_text = topic if topic else "첨부자료 핵심 요약 및 부동산 분석 브리핑"
-            return (
-                f"다음 첨부파일({file_data['filename']})의 내용을 꼼꼼히 파악하여 네이버 블로그 글을 작성해주세요.\n\n"
-                f"[요청 주제 및 작성 방향]:\n{topic_text}\n\n"
-                f"[첨부파일 본문 내용]:\n{file_data['content'][:15000]}"
-            )
+    def _prepare_user_content(self, mode: str, topic: str = "", file_paths: list = None, property_info: dict = None):
+        """작성 모드에 따른 사용자 프롬프트 및 다중 파일/이미지 데이터 구성"""
+        file_paths = file_paths or []
+
+        if mode == "property":
+            return _prepare_property_content(property_info, topic, file_paths)
+
+        if mode == "file" and file_paths:
+            return _prepare_file_content(file_paths, topic)
 
         if mode == "news":
             return (
@@ -151,14 +233,29 @@ class GeminiBlogService:
 
         return f"다음 주제 및 내용으로 네이버 블로그 글을 작성해주세요:\n\n[주제/메모]: {topic}"
 
-    def generate_blog_post(self, mode: str, topic: str, file_path: str = None, tone_key: str = "neighbor", config: dict = None) -> dict:
+    def generate_blog_post(
+        self,
+        mode: str,
+        topic: str = "",
+        file_paths: list = None,
+        file_path: str = None,
+        property_info: dict = None,
+        tone_key: str = "neighbor",
+        config: dict = None
+    ) -> dict:
         """블로그 글 생성 메인 함수"""
         if not self.api_key:
-            raise ValueError("Gemini API 키가 설정되지 않았습니다. 상단 'API 키 설정'에서 키를 입력해주세요.")
+            raise ValueError("Gemini API 키가 설정되지 않았습니다. 상단 '환경 설정'에서 키를 입력해주세요.")
+
+        # 단일 file_path 지원 호환성 처리
+        paths = list(file_paths) if file_paths else []
+        if file_path and file_path not in paths:
+            paths.insert(0, file_path)
 
         cfg = config or {}
-        system_instruction = self._build_system_prompt(tone_key, cfg)
-        user_content = self._prepare_user_content(mode, topic, file_path)
+        is_property_mode = (mode == "property")
+        system_instruction = self._build_system_prompt(tone_key, cfg, is_property=is_property_mode)
+        user_content = self._prepare_user_content(mode, topic=topic, file_paths=paths, property_info=property_info)
 
         raw_text = self._call_gemini_api(system_instruction, user_content, enable_grounding=(mode == "news"))
 
@@ -195,10 +292,11 @@ class GeminiBlogService:
         )
 
         if isinstance(user_content, list):
-            contents = [
-                user_content[0],
-                types.Part.from_bytes(data=user_content[1]["data"], mime_type=user_content[1]["mime_type"])
-            ]
+            # 첫 번째는 텍스트 프롬프트, 나머지는 이미지 파트들
+            contents = [user_content[0]]
+            for item in user_content[1:]:
+                if isinstance(item, dict) and "data" in item:
+                    contents.append(types.Part.from_bytes(data=item["data"], mime_type=item["mime_type"]))
         else:
             contents = user_content
 
@@ -226,14 +324,18 @@ class GeminiBlogService:
         )
 
         if isinstance(user_content, list):
-            import io
             # pyrefly: ignore [missing-import]
             from PIL import Image
-            img = Image.open(io.BytesIO(user_content[1]["data"]))
-            res = model.generate_content([user_content[0], img])
+            contents = [user_content[0]]
+            for item in user_content[1:]:
+                if isinstance(item, dict) and "data" in item:
+                    img = Image.open(io.BytesIO(item["data"]))
+                    contents.append(img)
+            res = model.generate_content(contents)
         else:
             res = model.generate_content(user_content)
 
         if res and res.text:
             return res.text
         raise RuntimeError("레거시 google.generativeai SDK에서 텍스트 응답을 받지 못했습니다.")
+

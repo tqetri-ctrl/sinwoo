@@ -236,14 +236,42 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     border: none;
     background: none;
 }
+/* 사진 목록 리스트 및 칩 */
+QListWidget#PhotoList {
+    background-color: #F8FAFC;
+    border: 1.5px dashed #CBD5E1;
+    border-radius: 8px;
+    padding: 6px;
+    font-size: 12px;
+}
+
+QListWidget#PhotoList::item {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    color: #1E293B;
+}
+
+QListWidget#PhotoList::item:hover {
+    background-color: #EFF6FF;
+    border-color: #93C5FD;
+}
+
+QListWidget#PhotoList::item:selected {
+    background-color: #DBEAFE;
+    color: #1E40AF;
+    font-weight: bold;
+}
 """
 
 def generate_blog_preview_html(title: str, body_markdown: str, tags: list) -> str:
     """
     네이버 블로그 스마트에디터 ONE과 흡사한 단정하고 깔끔한 HTML 미리보기 렌더링 생성
     """
-    # 마크다운 ➔ HTML 변환
-    html_body = markdown.markdown(body_markdown, extensions=['extra', 'nl2br'])
+    # 마크다운 ➔ HTML 변환 (tables 확장 포함)
+    html_body = markdown.markdown(body_markdown, extensions=['extra', 'nl2br', 'tables'])
     
     # 플레이스홀더를 예쁜 블로그 요소 카드/배지로 시각화 (O(N) 선형 치환)
     def _replace_placeholder(match):
@@ -251,16 +279,20 @@ def generate_blog_preview_html(title: str, body_markdown: str, tags: list) -> st
         # 이모지 제거 및 공백 정돈
         cleaned = re.sub(r'^[✨💡📸📊📞]\s*', '', raw).strip()
         
-        if cleaned.startswith(("추천 스티커:", "추천스티커:")):
+        # 1. 사진 계열 ([📸 사진 1: ...], [📸 현장 사진: ...], [📸 추천 사진: ...] 등)
+        if re.match(r'^(사진\s*\d+|현장\s*사진|추천\s*사진|실제\s*사진|공간\s*사진)\s*:', cleaned):
+            parts = cleaned.split(":", 1)
+            prefix = parts[0].strip()
+            val = parts[1].strip() if len(parts) > 1 else ""
+            return f'<div class="placeholder-box photo-box"><span class="icon">📸</span><strong>[{prefix}]</strong> {val}</div>'
+            
+        if cleaned.startswith(("추천 스티커:", "추천스티커:", "스티커:")):
             val = cleaned.split(":", 1)[1].strip()
-            return f'<div class="placeholder-box sticker-box"><span class="icon">✨</span><strong>[네이버 스티커 추천]</strong> {val}</div>'
-        if cleaned.startswith(("추천 사진:", "추천사진:")):
+            return f'<div class="placeholder-box sticker-box"><span class="icon">✨</span><strong>[네이버 스티커]</strong> {val}</div>'
+        if cleaned.startswith(("추천 자료:", "추천자료:", "추천 표:", "추천표:", "추천 차트:", "추천차트:", "자료:")):
             val = cleaned.split(":", 1)[1].strip()
-            return f'<div class="placeholder-box photo-box"><span class="icon">📸</span><strong>[추천 사진 삽입]</strong> {val}</div>'
-        if cleaned.startswith(("추천 자료:", "추천자료:", "추천 표:", "추천표:", "추천 차트:", "추천차트:")):
-            val = cleaned.split(":", 1)[1].strip()
-            return f'<div class="placeholder-box data-box"><span class="icon">📊</span><strong>[추천 자료/그래프]</strong> {val}</div>'
-        if cleaned.startswith(("추천 배너:", "추천배너:")):
+            return f'<div class="placeholder-box data-box"><span class="icon">📊</span><strong>[자료/그래프]</strong> {val}</div>'
+        if cleaned.startswith(("추천 배너:", "추천배너:", "명함 배너:", "상담 배너:")):
             val = cleaned.split(":", 1)[1].strip()
             return f'<div class="placeholder-box banner-box"><span class="icon">📞</span><strong>[사무소 명함/상담 배너]</strong> {val}</div>'
         
@@ -334,6 +366,37 @@ def generate_blog_preview_html(title: str, body_markdown: str, tags: list) -> st
             background: linear-gradient(to top, #DCFCE7 40%, transparent 40%);
             padding: 0 2px;
         }}
+        /* 표(Table) 스타일 - 네이버 블로그 스마트에디터풍 */
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }}
+        th, td {{
+            border: 1px solid #E2E8F0;
+            padding: 10px 14px;
+            text-align: left;
+        }}
+        th {{
+            background-color: #F1F5F9;
+            font-weight: bold;
+            color: #1E293B;
+            width: 25%;
+        }}
+        td {{
+            background-color: #FFFFFF;
+            color: #334155;
+        }}
+        /* 리스트 스타일 */
+        ul, ol {{
+            padding-left: 24px;
+            margin-bottom: 20px;
+        }}
+        li {{
+            margin-bottom: 6px;
+        }}
+        /* 플레이스홀더 박스 */
         .placeholder-box {{
             margin: 22px 0;
             padding: 14px 18px;
@@ -354,7 +417,7 @@ def generate_blog_preview_html(title: str, body_markdown: str, tags: list) -> st
         }}
         .photo-box {{
             background-color: #EFF6FF;
-            border: 1px dashed #3B82F6;
+            border: 1.5px dashed #3B82F6;
             color: #1E40AF;
         }}
         .data-box {{
@@ -388,7 +451,7 @@ def generate_blog_preview_html(title: str, body_markdown: str, tags: list) -> st
     <body>
     <div class="blog-container">
         <div class="blog-header">
-            <div class="blog-category">부동산 소식 & 현황 브리핑</div>
+            <div class="blog-category">부동산 소식 & 매물 브리핑</div>
             <h1 class="blog-title">{title}</h1>
         </div>
         <div class="blog-content">
@@ -402,3 +465,4 @@ def generate_blog_preview_html(title: str, body_markdown: str, tags: list) -> st
     </html>
     """
     return full_html
+
