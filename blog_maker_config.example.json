@@ -1,0 +1,13 @@
+﻿{
+  "gemini_api_key": "",
+  "selected_model": "gemini-3.5-flash",
+  "default_tone": "neighbor",
+  "emoji_density": "normal",
+  "office_name": "",
+  "agent_name": "",
+  "office_phone": "",
+  "office_location": "",
+  "custom_signature": "",
+  "include_office_info": true,
+  "theme": "clean_light"
+}

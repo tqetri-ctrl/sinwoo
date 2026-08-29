@@ -1,0 +1,23 @@
+﻿# 개인 설정 및 API 키 저장 파일 (보안)
+blog_maker_config.json
+
+# 바이너리 실행 파일 및 빌드 산출물 (50MB+ 대용량 파일 제외)
+*.exe
+*.spec
+build/
+dist/
+
+# 파이썬 캐시 및 가상환경
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# IDE 및 OS 임시 파일
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+Desktop.ini
