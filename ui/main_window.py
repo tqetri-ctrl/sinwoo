@@ -226,7 +226,7 @@ class MainWindow(QMainWindow):
         self.update_api_status_badge()
 
     def init_window(self):
-        self.setWindowTitle("공인중개사 네이버 블로그 글 생성기 (AI 매물 & 브리핑)")
+        self.setWindowTitle("신우 공인중개사 | AI 네이버 블로그 글 생성기")
         self.resize(1320, 890)
         self.setStyleSheet(MAIN_STYLESHEET)
 
@@ -262,13 +262,14 @@ class MainWindow(QMainWindow):
         header = QFrame()
         header.setObjectName("HeaderCard")
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(20, 10, 20, 10)
+        layout.setContentsMargins(20, 12, 20, 12)
 
         # 좌측 타이틀
         title_layout = QVBoxLayout()
-        lbl_title = QLabel("🏠 공인중개사 네이버 블로그 글 생성기")
+        title_layout.setSpacing(4)
+        lbl_title = QLabel('🏢 <span style="color: #1D4ED8; font-weight: 800; font-size: 19px;">신우 공인중개사</span> <span style="color: #CBD5E1; font-weight: 300; font-size: 16px;">|</span> <span style="color: #0F172A; font-weight: 700; font-size: 18px;">AI 네이버 블로그 글 생성기</span>')
         lbl_title.setObjectName("AppTitle")
-        lbl_subtitle = QLabel("여러 장의 현장 사진 매물 소개부터 최신 부동산 이슈까지, 네이버 블로그 맞춤 글을 자동으로 작성합니다.")
+        lbl_subtitle = QLabel("신우 공인중개사 전용 · 현장 사진 매물 소개부터 부동산 정책/이슈 브리핑까지 원클릭 자동 생성")
         lbl_subtitle.setObjectName("AppSubtitle")
         title_layout.addWidget(lbl_title)
         title_layout.addWidget(lbl_subtitle)
