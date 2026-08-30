@@ -1,5 +1,6 @@
 """
-Windows 무설치 단일 실행 파일(.exe) 단독 포터블 빌드 스크립트 (--onefile)
+Windows 초고속 구동 폴더형 실행 패키지 빌드 스크립트 (--onedir)
+압축 해제 과정이 전혀 없어 0.5초 만에 즉시 실행됩니다.
 """
 
 import os
@@ -9,9 +10,9 @@ import shutil
 
 DIVIDER = "=" * 50
 
-def build_single_exe():
+def build_fast_directory():
     print(DIVIDER)
-    print(" [Start] Building Standalone Portable Single .exe")
+    print(" [Start] Building High-Speed Portable Folder (--onedir)")
     print(DIVIDER)
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -20,9 +21,9 @@ def build_single_exe():
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm",
-        "--onefile",            # 단 하나의 독립 실행 파일 .exe 생성
+        "--onedir",             # 압축 해제 없이 즉시 실행되는 폴더형 빌드
         "--windowed",           # 콘솔창 숨김 (GUI 모드)
-        "--name", "공인중개사_블로그_생성기",
+        "--name", "공인중개사_블로그_생성기_고속실행",
         "--clean",
         "--add-data", f"{os.path.join(base_dir, 'prompts')};prompts",
         "--add-data", f"{os.path.join(base_dir, 'ui')};ui",
@@ -49,21 +50,16 @@ def build_single_exe():
     result = subprocess.run(cmd)
 
     if result.returncode == 0:
-        dist_exe = os.path.join(base_dir, 'dist', '공인중개사_블로그_생성기.exe')
-        target_exe = os.path.join(base_dir, '공인중개사_블로그_생성기.exe')
-        
-        # 루트 디렉토리에 복사
-        if os.path.exists(dist_exe):
-            try:
-                shutil.copy2(dist_exe, target_exe)
-            except Exception as e:
-                print(f"Direct copy notice: {e}")
-            print(DIVIDER)
-            print(" [Success] Standalone Portable .exe created successfully!")
-            print(f" Output: {target_exe}")
-            print(DIVIDER)
+        dist_dir = os.path.join(base_dir, 'dist', '공인중개사_블로그_생성기_고속실행')
+        exe_path = os.path.join(dist_dir, '공인중개사_블로그_생성기_고속실행.exe')
+        print(DIVIDER)
+        print(" [Success] High-Speed Folder package created successfully!")
+        print(f" Folder Location: {dist_dir}")
+        print(f" Executable File: {exe_path}")
+        print(" ⚡ 실행 팁: dist 폴더 내의 실행 파일 바로가기를 만들거나 폴더 전체를 배포하세요.")
+        print(DIVIDER)
     else:
         print("\n[Error] Build failed.")
 
 if __name__ == "__main__":
-    build_single_exe()
+    build_fast_directory()
