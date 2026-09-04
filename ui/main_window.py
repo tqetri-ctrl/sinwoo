@@ -268,7 +268,7 @@ class MainWindow(QMainWindow):
     def init_window(self):
         self.setWindowTitle("신우 공인중개사 | AI 네이버 블로그 글 생성기")
         self.resize(1260, 780)
-        self.setMinimumSize(980, 580)
+        self.setMinimumSize(680, 480)
         self.setStyleSheet(MAIN_STYLESHEET)
 
     def init_ui(self):
@@ -282,39 +282,60 @@ class MainWindow(QMainWindow):
         header = self.create_header()
         main_layout.addWidget(header)
 
-        # 본문 스플리터 (좌: 입력 및 옵션 48%, 우: 결과 및 미리보기 52%)
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setContentsMargins(12, 8, 12, 8)
-        splitter.setHandleWidth(8)
+        # 본문 반응형 스플리터 (화면 크기에 따라 가로/세로 유연하게 자동 조절)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.setContentsMargins(10, 6, 10, 6)
+        self.splitter.setHandleWidth(8)
 
         # 좌측: 1-2-3단계 입력 영역
         left_panel = self.create_left_input_panel()
-        splitter.addWidget(left_panel)
+        self.splitter.addWidget(left_panel)
 
         # 우측: 4단계 결과 미리보기 & 복사 영역
         right_panel = self.create_right_result_panel()
-        splitter.addWidget(right_panel)
+        self.splitter.addWidget(right_panel)
 
-        splitter.setSizes([560, 740])
-        main_layout.addWidget(splitter)
+        self.splitter.setSizes([540, 720])
+        self.splitter.setStretchFactor(0, 4)
+        self.splitter.setStretchFactor(1, 6)
+        main_layout.addWidget(self.splitter)
+
+    def resizeEvent(self, event):
+        """화면 크기 변경 시 레이아웃을 최적화하는 반응형(Responsive) 이벤트 핸들러"""
+        super().resizeEvent(event)
+        width = event.size().width()
+
+        # 920px 미만 (작은 창, 세로 모니터, 윈도우 좌우 분할 스냅): 상하 세로 분할로 자동 전환
+        if width < 920:
+            if self.splitter.orientation() != Qt.Orientation.Vertical:
+                self.splitter.setOrientation(Qt.Orientation.Vertical)
+                self.splitter.setSizes([380, 450])
+            self.lbl_subtitle.setVisible(False)
+        else:
+            # 920px 이상 (일반 가로 모니터): 좌우 2단 컬럼으로 자동 복귀
+            if self.splitter.orientation() != Qt.Orientation.Horizontal:
+                self.splitter.setOrientation(Qt.Orientation.Horizontal)
+                self.splitter.setSizes([540, 720])
+            self.lbl_subtitle.setVisible(True)
 
     def create_header(self) -> QWidget:
-        """상단 헤더 카드 (로고, 상태, 간편 설정 버튼) - 컴팩트 슬림 바"""
+        """상단 헤더 카드 (로고, 상태, 간편 설정 버튼) - 반응형 슬림 바"""
         header = QFrame()
         header.setObjectName("HeaderCard")
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(16, 6, 16, 6)
+        layout.setContentsMargins(14, 6, 14, 6)
 
         # 좌측 타이틀 (가로 인라인 배치로 위아래 낭비 공간 최소화)
         title_layout = QHBoxLayout()
-        title_layout.setSpacing(10)
-        lbl_title = QLabel('🏢 <span style="color: #1D4ED8; font-weight: 800; font-size: 19px;">신우 공인중개사</span> <span style="color: #CBD5E1; font-weight: 300; font-size: 17px;">|</span> <span style="color: #0F172A; font-weight: 700; font-size: 18px;">AI 네이버 블로그 글 생성기</span>')
-        lbl_title.setObjectName("AppTitle")
-        title_layout.addWidget(lbl_title)
+        title_layout.setSpacing(8)
+        self.lbl_title = QLabel('🏢 <span style="color: #1D4ED8; font-weight: 800; font-size: 18px;">신우 공인중개사</span> <span style="color: #CBD5E1; font-weight: 300; font-size: 16px;">|</span> <span style="color: #0F172A; font-weight: 700; font-size: 17px;">AI 네이버 블로그 글 생성기</span>')
+        self.lbl_title.setObjectName("AppTitle")
+        title_layout.addWidget(self.lbl_title)
 
-        lbl_subtitle = QLabel("· 현장 사진 매물 소개부터 부동산 정책/이슈 브리핑까지 원클릭 자동 생성")
-        lbl_subtitle.setStyleSheet("color: #64748B; font-size: 13px; margin-top: 2px;")
-        title_layout.addWidget(lbl_subtitle)
+        self.lbl_subtitle = QLabel("· 현장 사진 매물 소개부터 부동산 정책/이슈 브리핑까지 원클릭 자동 생성")
+        self.lbl_subtitle.setStyleSheet("color: #64748B; font-size: 13px; margin-top: 2px;")
+        title_layout.addWidget(self.lbl_subtitle)
         layout.addLayout(title_layout)
 
         layout.addStretch()
@@ -324,10 +345,10 @@ class MainWindow(QMainWindow):
         self.lbl_api_status.setStyleSheet("font-weight: bold; font-size: 13px; padding: 4px 10px; border-radius: 10px; background: #DCFCE7; color: #166534;")
         layout.addWidget(self.lbl_api_status)
 
-        btn_settings = QPushButton("⚙️ 환경 설정 (API 키)")
-        btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_settings.clicked.connect(self.open_settings_dialog)
-        layout.addWidget(btn_settings)
+        self.btn_settings = QPushButton("⚙️ 환경 설정 (API 키)")
+        self.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_settings.clicked.connect(self.open_settings_dialog)
+        layout.addWidget(self.btn_settings)
 
         return header
 
@@ -451,6 +472,9 @@ class MainWindow(QMainWindow):
         self.edit_prop_memo = QLineEdit()
         self.edit_prop_memo.setPlaceholderText("예: 즉시입주 협의가능, 신혼부부나 직장인에게 강추")
         prop_grid.addWidget(self.edit_prop_memo, 4, 1)
+
+        prop_grid.setColumnStretch(0, 0)
+        prop_grid.setColumnStretch(1, 1)
 
         tab_prop_layout.addLayout(prop_grid)
 
@@ -640,6 +664,8 @@ class MainWindow(QMainWindow):
         tone_grid.addWidget(self.radio_expert, 0, 1)
         tone_grid.addWidget(self.radio_coach, 1, 0)
         tone_grid.addWidget(self.radio_summary, 1, 1)
+        tone_grid.setColumnStretch(0, 1)
+        tone_grid.setColumnStretch(1, 1)
         layout_step2.addLayout(tone_grid)
 
         layout.addWidget(card_step2)
