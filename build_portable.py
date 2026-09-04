@@ -41,8 +41,6 @@ def _get_pyinstaller_cmd(base_dir: str, app_script: str, mode: str) -> list:
         "--exclude-module", "matplotlib",
         "--exclude-module", "scipy",
         "--exclude-module", "pandas",
-        "--exclude-module", "unittest",
-        "--exclude-module", "test",
         app_script
     ]
 

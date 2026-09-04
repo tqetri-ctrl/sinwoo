@@ -349,14 +349,14 @@ class GeminiBlogService:
         }
 
     def _call_gemini_api(self, system_prompt: str, user_content, enable_grounding: bool = False) -> str:
-        """google-genai 최신 SDK 우선 호출, 필요 시 레거시 SDK 및 공식 안정 모델 자동 폴백 체인 실행"""
+        """google-genai 최신 SDK를 통해 공식 안정 모델 자동 폴백 체인(3.6 -> 3.5 -> 3.5-lite -> 3.1-lite) 실행"""
         models_to_try = [self.model_name]
         for sup in SUPPORTED_MODELS:
             if sup not in models_to_try:
                 models_to_try.append(sup)
 
         # 지원 중단/만료 모델 엄격 필터링
-        models_to_try = [m for m in models_to_try if "2.5" not in m and "1.5" not in m and "2.0" not in m]
+        models_to_try = [m for m in models_to_try if "2.5" not in m and "1.5" not in m]
         if not models_to_try:
             models_to_try = list(SUPPORTED_MODELS)
 
@@ -365,17 +365,15 @@ class GeminiBlogService:
             self.model_name = m
             try:
                 return self._call_google_genai_sdk(system_prompt, user_content, enable_grounding)
-            except Exception as err_sdk1:
-                last_err = err_sdk1
-                err_str = str(err_sdk1).lower()
-                # 404/not found/no longer available 인 경우 다음 지원 모델로 자동 전환 재시도
-                if "404" in err_str or "not_found" in err_str or "no longer available" in err_str:
+            except Exception as err:
+                last_err = err
+                err_str = str(err).lower()
+                # 429(할당량 초과), 503(용량 부족/과부하), 404(모델 만료) 등 모델별 오류 시 다음 안정 모델로 즉시 자동 전환 재시도
+                if any(k in err_str for k in ["429", "resource_exhausted", "quota", "rate_limit", "503", "unavailable", "404", "not_found", "no longer available"]):
                     continue
-                # 그 외 오류일 때 레거시 SDK 시도
-                try:
-                    return self._call_legacy_genai_sdk(system_prompt, user_content, enable_grounding)
-                except Exception as err_sdk2:
-                    last_err = RuntimeError(f"1) {err_sdk1}\n2) {err_sdk2}")
+                # 인증 오류(401)나 요청 오류(400)는 모든 모델에서 동일하므로 중단
+                if "401" in err_str or "unauthenticated" in err_str or "400" in err_str or "invalid_argument" in err_str:
+                    break
 
         raise RuntimeError(f"Gemini API 호출 실패:\n{last_err}")
 

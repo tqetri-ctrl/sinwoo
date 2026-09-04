@@ -950,7 +950,16 @@ class MainWindow(QMainWindow):
         self.lbl_loading_status.setVisible(False)
 
         err_lower = error_msg.lower()
-        if "401" in err_lower or "unauthenticated" in err_lower or "access_token" in err_lower:
+        if "429" in err_lower or "resource_exhausted" in err_lower or "quota" in err_lower or "rate_limit" in err_lower:
+            guide = (
+                "⚠️ [Google Gemini API 사용량/할당량(Quota) 초과 안내]\n"
+                "Google Gemini 무료 티어의 분당 요청 한도(RPM) 또는 일일 사용량에 도달했습니다.\n\n"
+                "해결 방법:\n"
+                "1. 1~2분 정도 잠시 기다린 후 다시 생성 버튼을 눌러보세요.\n"
+                "2. 상단 우측 [⚙️ 환경 설정]에서 사용 모델을 'gemini-3.5-flash-lite' 또는 'gemini-3.1-flash-lite'로 변경해보세요.\n"
+                "3. Google AI Studio (https://aistudio.google.com/)에서 새 API 키를 발급받아 교체하시면 즉시 정상 이용이 가능합니다."
+            )
+        elif "401" in err_lower or "unauthenticated" in err_lower or "access_token" in err_lower:
             guide = (
                 "⚠️ [API 키 인증 오류 안내]\n"
                 "입력하신 Gemini API 키 인증에 실패했습니다.\n\n"
@@ -964,7 +973,7 @@ class MainWindow(QMainWindow):
                 "요청하신 모델 버전이 Google에서 만료되었습니다.\n\n"
                 "해결 방법:\n"
                 "1. 상단 우측 [⚙️ 환경 설정]을 클릭하세요.\n"
-                "2. 사용 모델을 'gemini-3.6-flash (기본 추천)' 또는 'gemini-2.0-flash'로 변경해주세요."
+                "2. 사용 모델을 'gemini-3.6-flash (기본 추천)' 또는 'gemini-3.5-flash'로 변경해주세요."
             )
         else:
             guide = "※ 인터넷 연결이 정상인지 확인 후 다시 시도해주세요."
