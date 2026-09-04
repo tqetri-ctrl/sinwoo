@@ -9,7 +9,7 @@ MAIN_STYLESHEET = """
 /* 전체 기본 설정 */
 QWidget {
     font-family: 'Pretendard', 'Malgun Gothic', 'Segoe UI', sans-serif;
-    font-size: 13px;
+    font-size: 15px;
     color: #2D3748;
     background-color: #F8FAFC;
 }
@@ -18,14 +18,14 @@ QWidget {
 QFrame#CardFrame {
     background-color: #FFFFFF;
     border: 1px solid #E2E8F0;
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: 10px;
+    padding: 10px 14px;
 }
 
 QFrame#HeaderCard {
     background-color: #FFFFFF;
     border-bottom: 1px solid #E2E8F0;
-    padding: 12px 20px;
+    padding: 6px 16px;
 }
 
 /* 라벨 스타일 */
@@ -37,13 +37,13 @@ QLabel#StepBadge {
     background-color: #2563EB;
     color: #FFFFFF;
     font-weight: bold;
-    font-size: 12px;
+    font-size: 13px;
     border-radius: 10px;
     padding: 2px 8px;
 }
 
 QLabel#StepTitle {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: bold;
     color: #1E293B;
 }
@@ -55,8 +55,41 @@ QLabel#AppTitle {
 }
 
 QLabel#AppSubtitle {
-    font-size: 12px;
+    font-size: 14px;
     color: #64748B;
+}
+
+/* 스크롤 영역 및 스크롤바 */
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
+
+QScrollBar:vertical {
+    border: none;
+    background: #F1F5F9;
+    width: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical {
+    background: #CBD5E1;
+    min-height: 24px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #94A3B8;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+    background: none;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
 }
 
 /* 탭 위젯 */
@@ -70,14 +103,14 @@ QTabWidget::pane {
 QTabBar::tab {
     background-color: #F1F5F9;
     color: #64748B;
-    padding: 10px 18px;
+    padding: 6px 14px;
     border: 1px solid #E2E8F0;
     border-bottom: none;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     margin-right: 4px;
     font-weight: bold;
-    font-size: 13px;
+    font-size: 14px;
 }
 
 QTabBar::tab:selected {
@@ -96,8 +129,8 @@ QLineEdit, QTextEdit, QPlainTextEdit {
     background-color: #FFFFFF;
     border: 1.5px solid #CBD5E1;
     border-radius: 8px;
-    padding: 10px;
-    font-size: 13px;
+    padding: 6px 10px;
+    font-size: 15px;
     color: #1E293B;
     selection-background-color: #93C5FD;
 }
@@ -112,8 +145,8 @@ QComboBox {
     background-color: #FFFFFF;
     border: 1.5px solid #CBD5E1;
     border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 13px;
+    padding: 5px 10px;
+    font-size: 14px;
     color: #1E293B;
 }
 
@@ -124,7 +157,7 @@ QComboBox:focus {
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
-    width: 28px;
+    width: 24px;
     border-left: none;
 }
 
@@ -134,8 +167,8 @@ QPushButton {
     color: #334155;
     border: 1.5px solid #CBD5E1;
     border-radius: 8px;
-    padding: 8px 16px;
-    font-size: 13px;
+    padding: 6px 14px;
+    font-size: 14px;
     font-weight: 600;
 }
 
@@ -154,9 +187,9 @@ QPushButton#GenerateButton {
     background-color: #2563EB;
     color: #FFFFFF;
     border: none;
-    border-radius: 10px;
-    padding: 14px 24px;
-    font-size: 16px;
+    border-radius: 9px;
+    padding: 11px 20px;
+    font-size: 17px;
     font-weight: bold;
 }
 
@@ -180,7 +213,7 @@ QPushButton#NaverCopyButton {
     border: none;
     border-radius: 8px;
     padding: 10px 18px;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: bold;
 }
 
@@ -194,7 +227,7 @@ QPushButton#NaverCopyButton:pressed {
 
 /* 라디오 버튼 (카드형 톤앤매너 선택용) */
 QRadioButton {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     color: #334155;
     spacing: 8px;
@@ -242,7 +275,7 @@ QListWidget#PhotoList {
     border: 1.5px dashed #CBD5E1;
     border-radius: 8px;
     padding: 6px;
-    font-size: 12px;
+    font-size: 14px;
 }
 
 QListWidget#PhotoList::item {

@@ -15,7 +15,7 @@ CONFIG_FILE_PATH = os.path.join(get_app_dir(), "blog_maker_config.json")
 
 DEFAULT_CONFIG = {
     "gemini_api_key": "",
-    "selected_model": "gemini-3.5-flash",
+    "selected_model": "gemini-3.6-flash",
     "default_tone": "neighbor",  # neighbor, expert, coach, summary
     "emoji_density": "normal",   # high, normal, low
     "office_name": "",           # 공인중개사 사무소 이름 (예: 신우 공인중개사사무소)
@@ -38,9 +38,11 @@ def load_config():
                 data = json.load(f)
                 config = DEFAULT_CONFIG.copy()
                 config.update(data)
-                # 이전 2.5 버전이 저장되어 있으면 최신 안정 모델로 자동 마이그레이션
-                if "2.5" in config.get("selected_model", ""):
-                    config["selected_model"] = "gemini-2.0-flash"
+                # 이전 2.5 또는 지원 중단/구형 모델이 저장되어 있으면 최신 추천 모델로 자동 마이그레이션
+                cur_model = config.get("selected_model", "")
+                if not cur_model or "2.5" in cur_model or "1.5" in cur_model:
+                    config["selected_model"] = "gemini-3.6-flash"
+                    save_config(config)
                 return config
         except Exception as e:
             print(f"설정 파일 로드 오류: {e}")

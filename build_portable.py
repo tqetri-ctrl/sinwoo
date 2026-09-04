@@ -21,37 +21,39 @@ def build(mode="onedir"):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     app_script = os.path.join(base_dir, "app.py")
 
-    mode_flag = "--onedir" if mode == "onedir" else "--onefile"
-
-    cmd = [
-        sys.executable, "-m", "PyInstaller",
-        "--noconfirm",
-        mode_flag,
-        "--windowed",           # 콘솔창 숨김 (GUI 모드)
-        "--name", "공인중개사_블로그_생성기",
-        "--clean",
-        "--add-data", f"{os.path.join(base_dir, 'prompts')};prompts",
-        "--add-data", f"{os.path.join(base_dir, 'ui')};ui",
-        "--add-data", f"{os.path.join(base_dir, 'services')};services",
-        # 필수 의존성 명시
-        "--hidden-import", "PyQt6",
-        "--hidden-import", "google.genai",
-        "--hidden-import", "google.generativeai",
-        "--hidden-import", "pypdf",
-        "--hidden-import", "docx",
-        "--hidden-import", "markdown",
-        "--hidden-import", "bs4",
-        "--hidden-import", "PIL",
-        "--hidden-import", "PIL.Image",
-        # 구동 속도를 갉아먹는 불필요한 대형 패키지 제외
-        "--exclude-module", "tkinter",
-        "--exclude-module", "matplotlib",
-        "--exclude-module", "scipy",
-        "--exclude-module", "pandas",
-        "--exclude-module", "unittest",
-        "--exclude-module", "test",
-        app_script
-    ]
+    spec_file = os.path.join(base_dir, "공인중개사_블로그_생성기.spec")
+    if os.path.exists(spec_file) and mode == "onedir":
+        cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm", spec_file]
+    else:
+        cmd = [
+            sys.executable, "-m", "PyInstaller",
+            "--noconfirm",
+            mode_flag,
+            "--windowed",           # 콘솔창 숨김 (GUI 모드)
+            "--name", "공인중개사_블로그_생성기",
+            "--clean",
+            "--add-data", f"{os.path.join(base_dir, 'prompts')};prompts",
+            "--add-data", f"{os.path.join(base_dir, 'ui')};ui",
+            "--add-data", f"{os.path.join(base_dir, 'services')};services",
+            # 필수 의존성 명시
+            "--hidden-import", "PyQt6",
+            "--hidden-import", "google.genai",
+            "--hidden-import", "google.generativeai",
+            "--hidden-import", "pypdf",
+            "--hidden-import", "docx",
+            "--hidden-import", "markdown",
+            "--hidden-import", "bs4",
+            "--hidden-import", "PIL",
+            "--hidden-import", "PIL.Image",
+            # 구동 속도를 갉아먹는 불필요한 대형 패키지 제외
+            "--exclude-module", "tkinter",
+            "--exclude-module", "matplotlib",
+            "--exclude-module", "scipy",
+            "--exclude-module", "pandas",
+            "--exclude-module", "unittest",
+            "--exclude-module", "test",
+            app_script
+        ]
 
     print("Running command:", " ".join(cmd))
     result = subprocess.run(cmd)

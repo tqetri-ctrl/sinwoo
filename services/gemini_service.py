@@ -5,7 +5,7 @@ from datetime import datetime
 from prompts.blog_templates import TONE_PRESETS, SYSTEM_PROMPT_TEMPLATE, PROPERTY_PROMPT_TEMPLATE
 from services.file_parser import extract_text_from_file
 
-DEFAULT_MODEL = "gemini-3.5-flash"
+DEFAULT_MODEL = "gemini-3.6-flash"
 SECTION_TITLES = "[제목 후보]"
 SECTION_BODY = "[블로그 본문]"
 SECTION_TAGS = "[네이버 블로그 추천 태그]"
@@ -217,7 +217,7 @@ class GeminiBlogService:
 
     def _sanitize_model_name(self, model_name: str) -> str:
         """모델명 정리 및 기본값 폴백"""
-        if not model_name or "2.5" in model_name:
+        if not model_name or "2.5" in model_name or "1.5" in model_name:
             return DEFAULT_MODEL
         return model_name
 
@@ -340,13 +340,28 @@ class GeminiBlogService:
         }
 
     def _call_gemini_api(self, system_prompt: str, user_content, enable_grounding: bool = False) -> str:
-        """google-genai 최신 SDK 우선 호출, 필요 시 레거시 SDK 폴백"""
+        """google-genai 최신 SDK 우선 호출, 필요 시 레거시 SDK 폴백 및 404 발생 시 최신 모델 자동 복구"""
         try:
             return self._call_google_genai_sdk(system_prompt, user_content, enable_grounding)
         except Exception as err_sdk1:
+            err_str = str(err_sdk1).lower()
+            # 404 NOT_FOUND 혹은 no longer available 발생 시 최신 기본 모델(gemini-3.6-flash)로 모델을 자동 전환 후 재시도
+            if "404" in err_str or "not_found" in err_str or "no longer available" in err_str:
+                self.model_name = DEFAULT_MODEL
+                try:
+                    return self._call_google_genai_sdk(system_prompt, user_content, enable_grounding)
+                except Exception as retry_err:
+                    err_sdk1 = retry_err
             try:
                 return self._call_legacy_genai_sdk(system_prompt, user_content, enable_grounding)
             except Exception as err_sdk2:
+                # 레거시에서도 실패했고 이전 에러가 404였으면 DEFAULT_MODEL로 최신 SDK 마지막 재시도
+                if self.model_name != DEFAULT_MODEL:
+                    self.model_name = DEFAULT_MODEL
+                    try:
+                        return self._call_google_genai_sdk(system_prompt, user_content, enable_grounding)
+                    except Exception:
+                        pass
                 raise RuntimeError(f"Gemini API 호출 오류:\n1) {err_sdk1}\n2) {err_sdk2}")
 
     def _call_google_genai_sdk(self, system_prompt: str, user_content, enable_grounding: bool) -> str:
@@ -390,17 +405,18 @@ class GeminiBlogService:
         import google.generativeai as legacy_genai
         legacy_genai.configure(api_key=self.api_key)
 
+        target_model = self.model_name if ("gemini" in self.model_name and "1.5" not in self.model_name and "2.5" not in self.model_name) else DEFAULT_MODEL
         tools = [{"google_search_retrieval": {}}] if enable_grounding else None
         try:
             model = legacy_genai.GenerativeModel(
-                model_name=self.model_name if "gemini" in self.model_name else "gemini-1.5-flash",
+                model_name=target_model,
                 generation_config={"temperature": 0.7},
                 system_instruction=system_prompt,
                 tools=tools
             )
         except Exception:
             model = legacy_genai.GenerativeModel(
-                model_name=self.model_name if "gemini" in self.model_name else "gemini-1.5-flash",
+                model_name=target_model,
                 generation_config={"temperature": 0.7},
                 system_instruction=system_prompt
             )
