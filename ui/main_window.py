@@ -32,6 +32,7 @@ DEFAULT_MODEL_NAME = "gemini-3.6-flash"
 FLASH_35_MODEL_NAME = "gemini-3.5-flash"
 PRO_MODEL_NAME = "gemini-3.5-pro"
 FLASH_20_MODEL_NAME = "gemini-2.0-flash"
+MUTED_TEXT_STYLE = "color: #475569; font-size: 13px;"
 
 
 class BlogGenerationThread(QThread):
@@ -447,7 +448,7 @@ class MainWindow(QMainWindow):
         # 상단 가이드 & 오늘 작성 기준일 배지
         news_header = QHBoxLayout()
         lbl_news_guide = QLabel("💡 작성할 주제를 적어주시면, 인터넷 최신 기사를 검색해 분석합니다.")
-        lbl_news_guide.setStyleSheet("color: #475569; font-size: 13px;")
+        lbl_news_guide.setStyleSheet(MUTED_TEXT_STYLE)
         news_header.addWidget(lbl_news_guide, 1)
 
         today_str = datetime.now().strftime("%Y년 %m월 %d일")
@@ -493,7 +494,7 @@ class MainWindow(QMainWindow):
         self.chk_source_date = QCheckBox("발표 시점/일자 본문 표기")
         self.chk_source_date.setChecked(self.config.get("include_source_date", True))
         self.chk_source_date.setToolTip("본문에 '2026년 최근 발표 기준', '최근 보도에 따르면' 등 최신 시점을 명시하여 신뢰도를 높입니다.")
-        self.chk_source_date.setStyleSheet("color: #475569; font-size: 13px;")
+        self.chk_source_date.setStyleSheet(MUTED_TEXT_STYLE)
         freshness_bar.addWidget(self.chk_source_date)
 
         freshness_bar.addStretch()
@@ -514,7 +515,7 @@ class MainWindow(QMainWindow):
         tab_file_layout.setSpacing(6)
 
         lbl_file_guide = QLabel("📁 보도자료, 분양 공고문, HWP, PDF, 워드, 텍스트 파일을 분석하여 포스팅합니다.")
-        lbl_file_guide.setStyleSheet("color: #475569; font-size: 13px;")
+        lbl_file_guide.setStyleSheet(MUTED_TEXT_STYLE)
         tab_file_layout.addWidget(lbl_file_guide)
 
         file_pick_layout = QHBoxLayout()

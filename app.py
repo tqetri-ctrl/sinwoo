@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 from ui.main_window import MainWindow
 
+FONT_NAME = "Malgun Gothic"
+
 def main():
     # 고해상도 지원 속성 활성화
     try:
@@ -31,7 +33,9 @@ def main():
     # 즉각적인 시각적 피드백을 제공하는 로딩 스플래시 화면
     splash = None
     try:
+        # pyrefly: ignore [missing-import]
         from PyQt6.QtWidgets import QSplashScreen
+        # pyrefly: ignore [missing-import]
         from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont
         pixmap = QPixmap(420, 200)
         pixmap.fill(QColor("#1E293B"))
@@ -39,16 +43,16 @@ def main():
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         painter.setPen(QColor("#FFFFFF"))
-        font_title = QFont("Malgun Gothic", 15, QFont.Weight.Bold)
+        font_title = QFont(FONT_NAME, 15, QFont.Weight.Bold)
         painter.setFont(font_title)
         painter.drawText(28, 65, "🏢 신우 공인중개사")
 
-        font_sub = QFont("Malgun Gothic", 12)
+        font_sub = QFont(FONT_NAME, 12)
         painter.setPen(QColor("#60A5FA"))
         painter.setFont(font_sub)
         painter.drawText(28, 100, "AI 네이버 블로그 글 생성기")
 
-        font_loading = QFont("Malgun Gothic", 10)
+        font_loading = QFont(FONT_NAME, 10)
         painter.setPen(QColor("#94A3B8"))
         painter.setFont(font_loading)
         painter.drawText(28, 155, "최신 서식 및 시스템을 준비하고 있습니다...")

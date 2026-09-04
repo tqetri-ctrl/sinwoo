@@ -11,26 +11,28 @@ def get_app_dir():
         # 일반 파이썬 스크립트 실행 환경
         return os.path.dirname(os.path.abspath(__file__))
 
+CONFIG_FILENAME = "blog_maker_config.json"
+
 def get_config_path():
     """설정 파일(blog_maker_config.json) 경로 탐색 및 반환"""
     app_dir = get_app_dir()
-    direct_path = os.path.join(app_dir, "blog_maker_config.json")
+    direct_path = os.path.join(app_dir, CONFIG_FILENAME)
     if os.path.exists(direct_path):
         return direct_path
 
     # dist 하위 폴더에서 실행된 경우 상위(프로젝트 루트) 탐색
     parent_dir = os.path.dirname(app_dir)
-    parent_path = os.path.join(parent_dir, "blog_maker_config.json")
+    parent_path = os.path.join(parent_dir, CONFIG_FILENAME)
     if os.path.exists(parent_path):
         return parent_path
 
     grandparent_dir = os.path.dirname(parent_dir)
-    grandparent_path = os.path.join(grandparent_dir, "blog_maker_config.json")
+    grandparent_path = os.path.join(grandparent_dir, CONFIG_FILENAME)
     if os.path.exists(grandparent_path):
         return grandparent_path
 
     # 작업 디렉토리(CWD) 확인
-    cwd_path = os.path.join(os.getcwd(), "blog_maker_config.json")
+    cwd_path = os.path.join(os.getcwd(), CONFIG_FILENAME)
     if os.path.exists(cwd_path):
         return cwd_path
 
