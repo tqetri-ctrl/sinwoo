@@ -21,3 +21,5 @@ env/
 *.swp
 Thumbs.db
 Desktop.ini
+error/api-error2.png
+.gitignore
