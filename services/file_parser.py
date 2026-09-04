@@ -5,10 +5,6 @@
 import os
 import zipfile
 import xml.etree.ElementTree as ET
-# pyrefly: ignore [missing-import]
-from pypdf import PdfReader
-# pyrefly: ignore [missing-import]
-import docx
 
 def extract_text_from_file(file_path: str) -> dict:
     """
@@ -68,6 +64,8 @@ def _read_plain_text(file_path: str) -> str:
 
 def _read_pdf(file_path: str) -> str:
     """PDF 파일의 텍스트 추출"""
+    # pyrefly: ignore [missing-import]
+    from pypdf import PdfReader
     reader = PdfReader(file_path)
     text_list = []
     for idx, page in enumerate(reader.pages):
@@ -79,6 +77,8 @@ def _read_pdf(file_path: str) -> str:
 
 def _read_docx(file_path: str) -> str:
     """Word DOCX 파일의 텍스트 추출"""
+    # pyrefly: ignore [missing-import]
+    import docx
     doc = docx.Document(file_path)
     text_list = []
     for p in doc.paragraphs:
