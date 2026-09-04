@@ -4,6 +4,7 @@ import re
 from datetime import datetime
 from prompts.blog_templates import TONE_PRESETS, SYSTEM_PROMPT_TEMPLATE, PROPERTY_PROMPT_TEMPLATE
 from services.file_parser import extract_text_from_file
+from services.news_search_service import fetch_hybrid_news, format_news_for_prompt
 
 DEFAULT_MODEL = "gemini-3.6-flash"
 SUPPORTED_MODELS = [
@@ -271,10 +272,16 @@ class GeminiBlogService:
             enable_local_search = cfg.get("enable_local_search", False)
             content = _prepare_property_content(property_info, topic, file_paths)
             if enable_local_search:
+                loc = property_info.get("location", "") if property_info else ""
+                search_query = f"{loc} 부동산 개발 호재" if loc else (topic or "부동산 개발 호재")
+                local_news = fetch_hybrid_news(search_query, config=cfg, max_results=3)
+                news_block = format_news_for_prompt(local_news)
+
                 search_hint = (
-                    f"\n\n### [주변 최신 호재 및 시세 인터넷 실시간 검색 지침]\n"
+                    f"\n\n### [주변 최신 호재 및 실시간 수집 자료]\n"
                     f"- 작성 기준일: {current_date_str}\n"
-                    f"- 매물 소재지 주변의 가장 최신({current_year}년 최근) 교통망 호재(지하철·도로망 개통/착공 등), 학군, 상권 개발 소식 및 최신 실거래가 동향을 검색하여 입지 분석에 자연스럽게 녹여주세요."
+                    f"{news_block}\n"
+                    f"- 위 최신 소식과 매물 소재지 주변의 최신 교통망(지하철·트램 등), 학군, 상권 개발 호재를 매물 입지 분석에 자연스럽게 녹여주세요."
                 )
                 if isinstance(content, list) and len(content) > 0:
                     content[0] = content[0] + search_hint
@@ -295,13 +302,18 @@ class GeminiBlogService:
             }
             period_desc = freshness_desc_map.get(freshness_period, freshness_desc_map["recent_3m"])
 
+            # 실시간 하이브리드 뉴스 수집 (네이버 API 또는 Google News RSS)
+            realtime_articles = fetch_hybrid_news(topic, config=cfg, max_results=5)
+            realtime_news_block = format_news_for_prompt(realtime_articles)
+
             return (
                 f"[작성 기준일]: {current_date_str} (현재 최신 시점)\n"
                 f"[작성 주제]: {topic}\n\n"
-                f"### [🔍 웹 검색 및 최신 자료 수집 필수 지침]:\n"
-                f"1. **최신 검색 쿼리 수행**: 반드시 '{topic} {current_year}년 최신', '{topic} {now.month}월 보도' 등 현재 시점({current_year}년) 키워드로 인터넷 뉴스 기사, 언론 보도, 국토교통부/정부 정책 발표 자료를 검색하세요.\n"
-                f"2. **검색 범위 및 최신성 필터**: {period_desc}.\n"
-                f"3. **오래된 기사(1~2년 전 과거 자료) 엄격 배제**: 1~2년 전({past_years_str})의 지난 기사나 이미 개정된 구형 정책을 현재의 사실처럼 인용하는 것은 절대 불가합니다. 검색 결과 중 발행 일자가 가장 최근인 보도를 엄격히 선별하세요.\n"
+                f"{realtime_news_block}\n\n"
+                f"### [🔍 네이버 블로그 포스팅 필수 작성 지침]:\n"
+                f"1. **실시간 수집 팩트 적극 인용**: 위에 실시간으로 수집된 최신 언론 보도의 핵심 내용, 발표 시점, 통계 수치를 본문에 자연스럽게 반영하여 글의 신뢰성을 극대화하세요.\n"
+                f"2. **작성 범위 및 최신성 필터**: {period_desc}.\n"
+                f"3. **오래된 기사(1~2년 전 과거 자료) 엄격 배제**: 1~2년 전({past_years_str})의 지난 기사나 이미 개정된 구형 정책을 현재의 사실처럼 인용하는 것은 절대 불가합니다.\n"
                 f"4. **본문 구성 및 시사점**: 최신 팩트와 현재 시장 상황, 실제 부동산 거래 및 매수/임차인에게 미치는 실질적인 영향과 대응 전략을 공인중개사의 신뢰감 있는 시각으로 알기 쉽게 브리핑해주세요."
             )
 

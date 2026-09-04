@@ -40,8 +40,10 @@ def get_config_path():
 
 CONFIG_FILE_PATH = get_config_path()
 
+DEFAULT_MODEL_NAME = "gemini-3.6-flash"
+
 VALID_MODELS = [
-    "gemini-3.6-flash",
+    DEFAULT_MODEL_NAME,
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite"
@@ -49,7 +51,7 @@ VALID_MODELS = [
 
 DEFAULT_CONFIG = {
     "gemini_api_key": "",
-    "selected_model": "gemini-3.6-flash",
+    "selected_model": DEFAULT_MODEL_NAME,
     "default_tone": "neighbor",  # neighbor, expert, coach, summary
     "emoji_density": "normal",   # high, normal, low
     "office_name": "",           # 공인중개사 사무소 이름 (예: 신우 공인중개사사무소)
@@ -61,6 +63,8 @@ DEFAULT_CONFIG = {
     "search_freshness": "recent_3m", # latest (최신 1개월), recent_3m (최근 3개월), this_year (올해), all (제한없음)
     "include_source_date": True,  # 글 본문에 발표 시점/최신 일자 명시 여부
     "enable_local_search": False, # 매물 소개 시 주변 최신 호재 실시간 검색 연동 여부
+    "naver_client_id": "",        # 네이버 뉴스 검색 API Client ID (선택 사항)
+    "naver_client_secret": "",    # 네이버 뉴스 검색 API Client Secret (선택 사항)
     "theme": "clean_light"
 }
 
@@ -76,7 +80,7 @@ def load_config():
                 # 구형/지원중단 모델이 저장되어 있으면 최신 공식 안정 모델로 자동 마이그레이션
                 cur_model = config.get("selected_model", "")
                 if not cur_model or cur_model not in VALID_MODELS:
-                    config["selected_model"] = "gemini-3.6-flash"
+                    config["selected_model"] = DEFAULT_MODEL_NAME
                     save_config(config)
                 return config
         except Exception as e:

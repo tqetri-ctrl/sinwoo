@@ -156,26 +156,61 @@ class SettingsDialog(QDialog):
 
         form_grid.addWidget(QLabel("대표자 성명:"), 1, 0)
         self.edit_agent_name = QLineEdit()
-        self.edit_agent_name.setPlaceholderText("예: 대표 공인중개사 홍길동")
+        self.edit_agent_name.setPlaceholderText("예: 대표 공인중개사 박혜숙")
         self.edit_agent_name.setText(self.config.get("agent_name", ""))
         form_grid.addWidget(self.edit_agent_name, 1, 1)
 
         form_grid.addWidget(QLabel("연락처/전화:"), 2, 0)
         self.edit_office_phone = QLineEdit()
-        self.edit_office_phone.setPlaceholderText("예: 02-1234-5678 / 010-1234-5678")
+        self.edit_office_phone.setPlaceholderText("예: 042-535-7008 / 010-XXXX-XXXX")
         self.edit_office_phone.setText(self.config.get("office_phone", ""))
         form_grid.addWidget(self.edit_office_phone, 2, 1)
 
         form_grid.addWidget(QLabel("사무소 위치:"), 3, 0)
         self.edit_office_location = QLineEdit()
-        self.edit_office_location.setPlaceholderText("예: 서울시 강남구 테헤란로 123 (OO역 3번 출구)")
+        self.edit_office_location.setPlaceholderText("예: 대전광역시 서구 도마동 80-37")
         self.edit_office_location.setText(self.config.get("office_location", ""))
         form_grid.addWidget(self.edit_office_location, 3, 1)
 
         office_layout.addLayout(form_grid)
         layout.addWidget(office_group)
 
-        # 3. 저장 및 닫기 버튼
+        # 3. 실시간 뉴스 검색 API 섹션 (하이브리드 지원)
+        naver_group = QFrame()
+        naver_group.setObjectName("CardFrame")
+        naver_layout = QVBoxLayout(naver_group)
+
+        lbl_naver_title = QLabel("🟢 실시간 뉴스 검색 (하이브리드 지원)")
+        lbl_naver_title.setStyleSheet("font-weight: bold; font-size: 16px; color: #1E293B;")
+        naver_layout.addWidget(lbl_naver_title)
+
+        lbl_naver_desc = QLabel(
+            "기본적으로 **무료 실시간 뉴스 검색(키 불필요)**이 자동 작동합니다.\n"
+            "네이버 공식 뉴스 검색 API(일 25,000건 무료)를 이용하시려면 아래에 입력하세요. (선택 사항)"
+        )
+        lbl_naver_desc.setStyleSheet("color: #64748B; font-size: 13px;")
+        lbl_naver_desc.setWordWrap(True)
+        naver_layout.addWidget(lbl_naver_desc)
+
+        naver_grid = QGridLayout()
+        naver_grid.setSpacing(8)
+        naver_grid.addWidget(QLabel("Naver Client ID:"), 0, 0)
+        self.edit_naver_id = QLineEdit()
+        self.edit_naver_id.setPlaceholderText("네이버 Client ID (비워두면 무료 오픈 검색 사용)")
+        self.edit_naver_id.setText(self.config.get("naver_client_id", ""))
+        naver_grid.addWidget(self.edit_naver_id, 0, 1)
+
+        naver_grid.addWidget(QLabel("Naver Secret:"), 1, 0)
+        self.edit_naver_secret = QLineEdit()
+        self.edit_naver_secret.setPlaceholderText("네이버 Client Secret")
+        self.edit_naver_secret.setText(self.config.get("naver_client_secret", ""))
+        self.edit_naver_secret.setEchoMode(QLineEdit.EchoMode.Password)
+        naver_grid.addWidget(self.edit_naver_secret, 1, 1)
+
+        naver_layout.addLayout(naver_grid)
+        layout.addWidget(naver_group)
+
+        # 4. 저장 및 닫기 버튼
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -206,6 +241,8 @@ class SettingsDialog(QDialog):
         self.config["agent_name"] = self.edit_agent_name.text().strip()
         self.config["office_phone"] = self.edit_office_phone.text().strip()
         self.config["office_location"] = self.edit_office_location.text().strip()
+        self.config["naver_client_id"] = self.edit_naver_id.text().strip()
+        self.config["naver_client_secret"] = self.edit_naver_secret.text().strip()
         
         save_config(self.config)
         self.accept()
