@@ -6,6 +6,12 @@ from prompts.blog_templates import TONE_PRESETS, SYSTEM_PROMPT_TEMPLATE, PROPERT
 from services.file_parser import extract_text_from_file
 
 DEFAULT_MODEL = "gemini-3.6-flash"
+SUPPORTED_MODELS = [
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite"
+]
 SECTION_TITLES = "[제목 후보]"
 SECTION_BODY = "[블로그 본문]"
 SECTION_TAGS = "[네이버 블로그 추천 태그]"
@@ -216,8 +222,11 @@ class GeminiBlogService:
         self.model_name = self._sanitize_model_name(model_name)
 
     def _sanitize_model_name(self, model_name: str) -> str:
-        """모델명 정리 및 기본값 폴백"""
-        if not model_name or "2.5" in model_name or "1.5" in model_name:
+        """모델명 정리 및 안정 모델 폴백"""
+        if not model_name or model_name not in SUPPORTED_MODELS:
+            for sup in SUPPORTED_MODELS:
+                if sup in str(model_name):
+                    return sup
             return DEFAULT_MODEL
         return model_name
 
@@ -340,17 +349,16 @@ class GeminiBlogService:
         }
 
     def _call_gemini_api(self, system_prompt: str, user_content, enable_grounding: bool = False) -> str:
-        """google-genai 최신 SDK 우선 호출, 필요 시 레거시 SDK 및 모델 자동 폴백(3.6 -> 2.0)"""
+        """google-genai 최신 SDK 우선 호출, 필요 시 레거시 SDK 및 공식 안정 모델 자동 폴백 체인 실행"""
         models_to_try = [self.model_name]
-        if DEFAULT_MODEL not in models_to_try:
-            models_to_try.append(DEFAULT_MODEL)
-        if "gemini-2.0-flash" not in models_to_try:
-            models_to_try.append("gemini-2.0-flash")
+        for sup in SUPPORTED_MODELS:
+            if sup not in models_to_try:
+                models_to_try.append(sup)
 
-        # 2.5 또는 1.5 등 지원 중단/만료 모델 엄격 필터링
-        models_to_try = [m for m in models_to_try if "2.5" not in m and "1.5" not in m]
+        # 지원 중단/만료 모델 엄격 필터링
+        models_to_try = [m for m in models_to_try if "2.5" not in m and "1.5" not in m and "2.0" not in m]
         if not models_to_try:
-            models_to_try = [DEFAULT_MODEL, "gemini-2.0-flash"]
+            models_to_try = list(SUPPORTED_MODELS)
 
         last_err = None
         for m in models_to_try:

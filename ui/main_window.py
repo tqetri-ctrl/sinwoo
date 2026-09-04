@@ -30,8 +30,8 @@ from ui.styles import MAIN_STYLESHEET, generate_blog_preview_html
 
 DEFAULT_MODEL_NAME = "gemini-3.6-flash"
 FLASH_35_MODEL_NAME = "gemini-3.5-flash"
-PRO_MODEL_NAME = "gemini-3.5-pro"
-FLASH_20_MODEL_NAME = "gemini-2.0-flash"
+FLASH_35_LITE_MODEL_NAME = "gemini-3.5-flash-lite"
+FLASH_31_LITE_MODEL_NAME = "gemini-3.1-flash-lite"
 MUTED_TEXT_STYLE = "color: #475569; font-size: 13px;"
 
 
@@ -108,22 +108,22 @@ class SettingsDialog(QDialog):
         self.edit_api_key.setEchoMode(QLineEdit.EchoMode.Password)
         api_layout.addWidget(self.edit_api_key)
 
-        # 모델 선택
+        # 모델 선택 (공식 안정 모델 4종)
         model_layout = QHBoxLayout()
         model_layout.addWidget(QLabel("사용 모델:"))
         self.combo_model = QComboBox()
         self.combo_model.addItems([
-            f"{DEFAULT_MODEL_NAME} (기본 추천: 최신 3.6 Flash)",
-            f"{FLASH_35_MODEL_NAME} (3.5 Flash)",
-            f"{PRO_MODEL_NAME} (3.5 Pro 정밀 분석)",
-            f"{FLASH_20_MODEL_NAME} (2.0 Flash)"
+            f"{DEFAULT_MODEL_NAME} (기본 추천: 최신 3.6 Flash / 안정)",
+            f"{FLASH_35_MODEL_NAME} (3.5 Flash 지능형 / 안정)",
+            f"{FLASH_35_LITE_MODEL_NAME} (3.5 Flash-Lite 고속·효율 / 안정)",
+            f"{FLASH_31_LITE_MODEL_NAME} (3.1 Flash-Lite 비용 최적화 / 안정)"
         ])
         selected_model = self.config.get("selected_model", DEFAULT_MODEL_NAME)
-        if "3.5-pro" in selected_model:
+        if "3.5-flash-lite" in selected_model:
             self.combo_model.setCurrentIndex(2)
         elif "3.5" in selected_model:
             self.combo_model.setCurrentIndex(1)
-        elif "2.0" in selected_model:
+        elif "3.1" in selected_model:
             self.combo_model.setCurrentIndex(3)
         else:
             self.combo_model.setCurrentIndex(0)
@@ -196,9 +196,9 @@ class SettingsDialog(QDialog):
         if idx == 1:
             self.config["selected_model"] = FLASH_35_MODEL_NAME
         elif idx == 2:
-            self.config["selected_model"] = PRO_MODEL_NAME
+            self.config["selected_model"] = FLASH_35_LITE_MODEL_NAME
         elif idx == 3:
-            self.config["selected_model"] = FLASH_20_MODEL_NAME
+            self.config["selected_model"] = FLASH_31_LITE_MODEL_NAME
         else:
             self.config["selected_model"] = DEFAULT_MODEL_NAME
         self.config["include_office_info"] = self.chk_include_office.isChecked()

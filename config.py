@@ -40,6 +40,13 @@ def get_config_path():
 
 CONFIG_FILE_PATH = get_config_path()
 
+VALID_MODELS = [
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite"
+]
+
 DEFAULT_CONFIG = {
     "gemini_api_key": "",
     "selected_model": "gemini-3.6-flash",
@@ -66,9 +73,9 @@ def load_config():
                 data = json.load(f)
                 config = DEFAULT_CONFIG.copy()
                 config.update(data)
-                # 이전 2.5 또는 지원 중단/구형 모델이 저장되어 있으면 최신 추천 모델로 자동 마이그레이션
+                # 구형/지원중단 모델이 저장되어 있으면 최신 공식 안정 모델로 자동 마이그레이션
                 cur_model = config.get("selected_model", "")
-                if not cur_model or "2.5" in cur_model or "1.5" in cur_model:
+                if not cur_model or cur_model not in VALID_MODELS:
                     config["selected_model"] = "gemini-3.6-flash"
                     save_config(config)
                 return config
