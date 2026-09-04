@@ -20,6 +20,7 @@ def build(mode="onedir"):
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     app_script = os.path.join(base_dir, "app.py")
+    mode_flag = "--onedir" if mode == "onedir" else "--onefile"
 
     spec_file = os.path.join(base_dir, "공인중개사_블로그_생성기.spec")
     if os.path.exists(spec_file) and mode == "onedir":

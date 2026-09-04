@@ -340,29 +340,36 @@ class GeminiBlogService:
         }
 
     def _call_gemini_api(self, system_prompt: str, user_content, enable_grounding: bool = False) -> str:
-        """google-genai 최신 SDK 우선 호출, 필요 시 레거시 SDK 폴백 및 404 발생 시 최신 모델 자동 복구"""
-        try:
-            return self._call_google_genai_sdk(system_prompt, user_content, enable_grounding)
-        except Exception as err_sdk1:
-            err_str = str(err_sdk1).lower()
-            # 404 NOT_FOUND 혹은 no longer available 발생 시 최신 기본 모델(gemini-3.6-flash)로 모델을 자동 전환 후 재시도
-            if "404" in err_str or "not_found" in err_str or "no longer available" in err_str:
-                self.model_name = DEFAULT_MODEL
-                try:
-                    return self._call_google_genai_sdk(system_prompt, user_content, enable_grounding)
-                except Exception as retry_err:
-                    err_sdk1 = retry_err
+        """google-genai 최신 SDK 우선 호출, 필요 시 레거시 SDK 및 모델 자동 폴백(3.6 -> 2.0)"""
+        models_to_try = [self.model_name]
+        if DEFAULT_MODEL not in models_to_try:
+            models_to_try.append(DEFAULT_MODEL)
+        if "gemini-2.0-flash" not in models_to_try:
+            models_to_try.append("gemini-2.0-flash")
+
+        # 2.5 또는 1.5 등 지원 중단/만료 모델 엄격 필터링
+        models_to_try = [m for m in models_to_try if "2.5" not in m and "1.5" not in m]
+        if not models_to_try:
+            models_to_try = [DEFAULT_MODEL, "gemini-2.0-flash"]
+
+        last_err = None
+        for m in models_to_try:
+            self.model_name = m
             try:
-                return self._call_legacy_genai_sdk(system_prompt, user_content, enable_grounding)
-            except Exception as err_sdk2:
-                # 레거시에서도 실패했고 이전 에러가 404였으면 DEFAULT_MODEL로 최신 SDK 마지막 재시도
-                if self.model_name != DEFAULT_MODEL:
-                    self.model_name = DEFAULT_MODEL
-                    try:
-                        return self._call_google_genai_sdk(system_prompt, user_content, enable_grounding)
-                    except Exception:
-                        pass
-                raise RuntimeError(f"Gemini API 호출 오류:\n1) {err_sdk1}\n2) {err_sdk2}")
+                return self._call_google_genai_sdk(system_prompt, user_content, enable_grounding)
+            except Exception as err_sdk1:
+                last_err = err_sdk1
+                err_str = str(err_sdk1).lower()
+                # 404/not found/no longer available 인 경우 다음 지원 모델로 자동 전환 재시도
+                if "404" in err_str or "not_found" in err_str or "no longer available" in err_str:
+                    continue
+                # 그 외 오류일 때 레거시 SDK 시도
+                try:
+                    return self._call_legacy_genai_sdk(system_prompt, user_content, enable_grounding)
+                except Exception as err_sdk2:
+                    last_err = RuntimeError(f"1) {err_sdk1}\n2) {err_sdk2}")
+
+        raise RuntimeError(f"Gemini API 호출 실패:\n{last_err}")
 
     def _call_google_genai_sdk(self, system_prompt: str, user_content, enable_grounding: bool) -> str:
         """최신 google.genai SDK 실행"""

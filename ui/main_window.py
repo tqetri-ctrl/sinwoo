@@ -927,15 +927,35 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "작성 완료! 🎉", "네이버 블로그 글이 멋지게 완성되었습니다!\n'네이버 블로그에 바로 붙여넣기 복사' 버튼을 눌러 블로그에 붙여넣어보세요.")
 
     def on_generation_error(self, error_msg: str):
-        """생성 오류 처리"""
+        """생성 오류 처리 및 원인별 친절한 해결 가이드 제공"""
         self.btn_generate.setEnabled(True)
         self.progress_bar.setVisible(False)
         self.lbl_loading_status.setVisible(False)
-        
+
+        err_lower = error_msg.lower()
+        if "401" in err_lower or "unauthenticated" in err_lower or "access_token" in err_lower:
+            guide = (
+                "⚠️ [API 키 인증 오류 안내]\n"
+                "입력하신 Gemini API 키 인증에 실패했습니다.\n\n"
+                "해결 방법:\n"
+                "1. 상단 우측 [⚙️ 환경 설정]을 클릭하세요.\n"
+                "2. Google AI Studio (https://aistudio.google.com/)에서 발급받은 올바른 Gemini API 키(AIzaSy... 형식)를 입력하고 저장해주세요."
+            )
+        elif "404" in err_lower or "not_found" in err_lower or "no longer available" in err_lower:
+            guide = (
+                "⚠️ [AI 모델 지원 종료 안내]\n"
+                "요청하신 모델 버전이 Google에서 만료되었습니다.\n\n"
+                "해결 방법:\n"
+                "1. 상단 우측 [⚙️ 환경 설정]을 클릭하세요.\n"
+                "2. 사용 모델을 'gemini-3.6-flash (기본 추천)' 또는 'gemini-2.0-flash'로 변경해주세요."
+            )
+        else:
+            guide = "※ 인터넷 연결이 정상인지 확인 후 다시 시도해주세요."
+
         QMessageBox.critical(
             self,
             "생성 중 오류 발생",
-            f"글을 생성하는 동안 문제가 발생했습니다:\n\n{error_msg}\n\n※ API 키가 올바른지, 인터넷 연결이 정상인지 확인해주세요."
+            f"글을 생성하는 동안 문제가 발생했습니다:\n\n{error_msg}\n\n{guide}"
         )
 
     def on_title_changed(self, index: int):
