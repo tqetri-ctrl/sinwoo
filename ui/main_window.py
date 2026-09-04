@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QLabel, QLineEdit, QTextEdit, QPushButton, QRadioButton, QButtonGroup,
     QTabWidget, QFileDialog, QMessageBox, QFrame, QSplitter,
     QDialog, QCheckBox, QComboBox, QTextBrowser, QApplication, QProgressBar,
-    QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea
+    QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea, QStackedWidget
 )
 # pyrefly: ignore [missing-import]
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QMimeData
@@ -341,22 +341,35 @@ class MainWindow(QMainWindow):
         header_step1 = QHBoxLayout()
         badge1 = QLabel("1단계")
         badge1.setObjectName("StepBadge")
-        title1 = QLabel("글감 넣기 (매물 사진 / 뉴스 / 자료 문서)")
+        title1 = QLabel("글감 종류:")
         title1.setObjectName("StepTitle")
         header_step1.addWidget(badge1)
         header_step1.addWidget(title1)
-        header_step1.addStretch()
+
+        # 드롭다운 선택 메뉴 (좁은 창에서도 가려짐 없이 깔끔하게 선택)
+        self.combo_input_mode = QComboBox()
+        self.combo_input_mode.addItems([
+            "🏠 현장 사진 매물 소개 (매매/전세/월세)",
+            "📰 부동산 뉴스/정보 실시간 브리핑",
+            "📁 문서/자료 분석 (PDF/HWP/보도자료)"
+        ])
+        self.combo_input_mode.setStyleSheet(
+            "font-weight: bold; color: #1D4ED8; font-size: 14px; "
+            "padding: 4px 8px; background-color: #EFF6FF; border: 1.5px solid #93C5FD;"
+        )
+        header_step1.addWidget(self.combo_input_mode, 1)
         layout_step1.addLayout(header_step1)
 
-        # 3개 탭 위젯
-        self.input_tab = QTabWidget()
+        # 모드 전환용 스택 위젯
+        self.stacked_input = QStackedWidget()
+        self.input_tab = self.stacked_input  # 호환성 별칭
 
         # ====================================================
-        # 탭 1: 🏠 현장 사진 매물 소개 (신규 전문 매물 탭)
+        # 모드 1: 🏠 현장 사진 매물 소개
         # ====================================================
         tab_property = QWidget()
         tab_prop_layout = QVBoxLayout(tab_property)
-        tab_prop_layout.setContentsMargins(8, 8, 8, 8)
+        tab_prop_layout.setContentsMargins(0, 4, 0, 0)
         tab_prop_layout.setSpacing(5)
 
         # 1) 거래 유형 및 매물 종류 선택
@@ -435,14 +448,14 @@ class MainWindow(QMainWindow):
         self.chk_prop_local_search.setStyleSheet("color: #475569; font-size: 13px; margin-top: 2px;")
         tab_prop_layout.addWidget(self.chk_prop_local_search)
 
-        self.input_tab.addTab(tab_property, "🏠 현장 사진 매물 소개")
+        self.stacked_input.addWidget(tab_property)
 
         # ====================================================
-        # 탭 2: 📰 인터넷 기사 찾아서 쓰기 (기존 기사/이슈 모드)
+        # 모드 2: 📰 인터넷 기사 찾아서 쓰기 (기존 기사/이슈 모드)
         # ====================================================
         tab_news = QWidget()
         tab_news_layout = QVBoxLayout(tab_news)
-        tab_news_layout.setContentsMargins(8, 8, 8, 8)
+        tab_news_layout.setContentsMargins(0, 4, 0, 0)
         tab_news_layout.setSpacing(6)
 
         # 상단 가이드 & 오늘 작성 기준일 배지
@@ -504,14 +517,14 @@ class MainWindow(QMainWindow):
         lbl_news_freshness_notice.setStyleSheet("color: #059669; font-size: 13px;")
         tab_news_layout.addWidget(lbl_news_freshness_notice)
 
-        self.input_tab.addTab(tab_news, "📰 부동산 뉴스/정보")
+        self.stacked_input.addWidget(tab_news)
 
         # ====================================================
-        # 탭 3: 📁 문서/자료 분석 모드 (PDF, HWP, DOCX 등)
+        # 모드 3: 📁 문서/자료 분석 모드 (PDF, HWP, DOCX 등)
         # ====================================================
         tab_file = QWidget()
         tab_file_layout = QVBoxLayout(tab_file)
-        tab_file_layout.setContentsMargins(8, 8, 8, 8)
+        tab_file_layout.setContentsMargins(0, 4, 0, 0)
         tab_file_layout.setSpacing(6)
 
         lbl_file_guide = QLabel("📁 보도자료, 분양 공고문, HWP, PDF, 워드, 텍스트 파일을 분석하여 포스팅합니다.")
@@ -533,9 +546,12 @@ class MainWindow(QMainWindow):
         self.edit_file_topic.setPlaceholderText("강조하고 싶은 내용이나 추가 메모 (선택사항)")
         tab_file_layout.addWidget(self.edit_file_topic)
         tab_file_layout.addStretch()
-        self.input_tab.addTab(tab_file, "📁 문서/자료 분석")
 
-        layout_step1.addWidget(self.input_tab)
+        self.stacked_input.addWidget(tab_file)
+
+        # 드롭다운 변경 시 스택 전환 연결
+        self.combo_input_mode.currentIndexChanged.connect(self.stacked_input.setCurrentIndex)
+        layout_step1.addWidget(self.stacked_input)
         layout.addWidget(card_step1)
 
         # ----------------------------------------------------
@@ -859,10 +875,10 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "API 키 필요", "글을 생성하려면 Gemini API 키를 먼저 입력해야 합니다.")
                 return
 
-        current_tab_idx = self.input_tab.currentIndex()
-        if current_tab_idx == 0:
+        current_mode_idx = self.combo_input_mode.currentIndex()
+        if current_mode_idx == 0:
             payload = self._get_property_input_payload()
-        elif current_tab_idx == 1:
+        elif current_mode_idx == 1:
             payload = self._get_news_input_payload()
         else:
             payload = self._get_file_input_payload()
