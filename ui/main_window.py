@@ -33,6 +33,7 @@ FLASH_35_MODEL_NAME = "gemini-3.5-flash"
 FLASH_35_LITE_MODEL_NAME = "gemini-3.5-flash-lite"
 FLASH_31_LITE_MODEL_NAME = "gemini-3.1-flash-lite"
 MUTED_TEXT_STYLE = "color: #475569; font-size: 13px;"
+CARD_HEADER_STYLE = "font-weight: bold; font-size: 16px; color: #1E293B;"
 
 
 class BlogGenerationThread(QThread):
@@ -94,7 +95,7 @@ class SettingsDialog(QDialog):
         api_layout = QVBoxLayout(api_group)
         
         lbl_api_title = QLabel("🔑 Google Gemini API 키")
-        lbl_api_title.setStyleSheet("font-weight: bold; font-size: 16px; color: #1E293B;")
+        lbl_api_title.setStyleSheet(CARD_HEADER_STYLE)
         api_layout.addWidget(lbl_api_title)
 
         lbl_api_desc = QLabel("무료로 발급받은 Gemini API 키를 입력하세요. (한 번 입력하면 자동 저장됩니다)")
@@ -138,7 +139,7 @@ class SettingsDialog(QDialog):
         office_layout = QVBoxLayout(office_group)
 
         lbl_office_title = QLabel("🏢 공인중개사 정보 (글 하단에 자동 추가)")
-        lbl_office_title.setStyleSheet("font-weight: bold; font-size: 16px; color: #1E293B;")
+        lbl_office_title.setStyleSheet(CARD_HEADER_STYLE)
         office_layout.addWidget(lbl_office_title)
 
         self.chk_include_office = QCheckBox("블로그 글 끝에 우리 부동산 사무소 정보를 항상 넣기")
@@ -181,7 +182,7 @@ class SettingsDialog(QDialog):
         naver_layout = QVBoxLayout(naver_group)
 
         lbl_naver_title = QLabel("🟢 실시간 뉴스 검색 (하이브리드 지원)")
-        lbl_naver_title.setStyleSheet("font-weight: bold; font-size: 16px; color: #1E293B;")
+        lbl_naver_title.setStyleSheet(CARD_HEADER_STYLE)
         naver_layout.addWidget(lbl_naver_title)
 
         lbl_naver_desc = QLabel(

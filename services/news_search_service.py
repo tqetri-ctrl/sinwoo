@@ -49,6 +49,45 @@ def _parse_pub_date(pub_date_str: str) -> str:
     return pub_date_str[:16]
 
 
+def _extract_source_and_title(clean_title: str, source_elem) -> tuple:
+    """기사 제목에서 언론사명 분리"""
+    source_name = ""
+    if source_elem is not None and source_elem.text:
+        source_name = source_elem.text.strip()
+    elif " - " in clean_title:
+        parts = clean_title.rsplit(" - ", 1)
+        clean_title = parts[0].strip()
+        source_name = parts[1].strip()
+    return clean_title, source_name or "주요 언론사"
+
+
+def _parse_rss_item(item) -> dict:
+    """개별 RSS item 요소를 기사 딕셔너리로 변환"""
+    title_elem = item.find("title")
+    link_elem = item.find("link")
+    pub_date_elem = item.find("pubDate")
+    desc_elem = item.find("description")
+    source_elem = item.find("source")
+
+    raw_title = title_elem.text if title_elem is not None and title_elem.text else ""
+    clean_title = _clean_html_tags(raw_title)
+    if not clean_title:
+        return None
+
+    clean_title, source_name = _extract_source_and_title(clean_title, source_elem)
+    raw_desc = desc_elem.text if desc_elem is not None and desc_elem.text else ""
+    raw_date = pub_date_elem.text if pub_date_elem is not None and pub_date_elem.text else ""
+    link = link_elem.text if link_elem is not None and link_elem.text else ""
+
+    return {
+        "title": clean_title,
+        "description": _clean_html_tags(raw_desc),
+        "pub_date": _parse_pub_date(raw_date),
+        "source": source_name,
+        "link": link
+    }
+
+
 def search_google_news_rss(query: str, max_results: int = 5) -> list:
     """
     Google News RSS를 통한 100% 무료 실시간 최신 뉴스 검색 (API 키 불필요)
@@ -67,43 +106,10 @@ def search_google_news_rss(query: str, max_results: int = 5) -> list:
         with urllib.request.urlopen(req, timeout=5) as resp:
             xml_data = resp.read()
             tree = ET.fromstring(xml_data)
-            items = tree.findall(".//item")
-
-            for item in items[:max_results]:
-                title_elem = item.find("title")
-                link_elem = item.find("link")
-                pub_date_elem = item.find("pubDate")
-                desc_elem = item.find("description")
-                source_elem = item.find("source")
-
-                raw_title = title_elem.text if title_elem is not None and title_elem.text else ""
-                clean_title = _clean_html_tags(raw_title)
-
-                # 언론사명 분리 (보통 "제목 - 언론사" 형태)
-                source_name = ""
-                if source_elem is not None and source_elem.text:
-                    source_name = source_elem.text.strip()
-                elif " - " in clean_title:
-                    parts = clean_title.rsplit(" - ", 1)
-                    clean_title = parts[0].strip()
-                    source_name = parts[1].strip()
-
-                raw_desc = desc_elem.text if desc_elem is not None and desc_elem.text else ""
-                clean_desc = _clean_html_tags(raw_desc)
-
-                raw_date = pub_date_elem.text if pub_date_elem is not None and pub_date_elem.text else ""
-                formatted_date = _parse_pub_date(raw_date)
-
-                link = link_elem.text if link_elem is not None and link_elem.text else ""
-
-                if clean_title:
-                    articles.append({
-                        "title": clean_title,
-                        "description": clean_desc,
-                        "pub_date": formatted_date,
-                        "source": source_name or "주요 언론사",
-                        "link": link
-                    })
+            for item in tree.findall(".//item")[:max_results]:
+                parsed = _parse_rss_item(item)
+                if parsed:
+                    articles.append(parsed)
     except Exception as e:
         print(f"[NewsSearch] Google News RSS 검색 실패: {e}")
 

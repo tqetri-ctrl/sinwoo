@@ -252,6 +252,107 @@ class GeminiBlogService:
             freshness_instruction=freshness_instruction
         )
 
+def _build_news_prompt(topic: str, cfg: dict) -> str:
+    """뉴스 기사 브리핑 모드 프롬프트 구성"""
+    now = datetime.now()
+    current_date_str = now.strftime("%Y년 %m월 %d일")
+    current_year = now.year
+    past_years_str = f"{current_year - 2}년~{current_year - 1}년"
+
+    freshness_period = cfg.get("search_freshness", "recent_3m")
+    freshness_desc_map = {
+        "latest": "가장 최근 1주일~1개월 이내 보도된 초밀착 최신 기사 및 보도자료 최우선 수집",
+        "recent_3m": f"최근 3개월 이내({current_year}년 최신) 보도된 뉴스 및 발표자료 중심",
+        "this_year": f"올해({current_year}년) 발표된 최신 부동산 정책 및 언론 보도 중심",
+        "all": "주제와 관련된 주요 보도 및 최신 정책 분석"
+    }
+    period_desc = freshness_desc_map.get(freshness_period, freshness_desc_map["recent_3m"])
+
+    # 실시간 하이브리드 뉴스 수집 (네이버 API 또는 Google News RSS)
+    realtime_articles = fetch_hybrid_news(topic, config=cfg, max_results=5)
+    realtime_news_block = format_news_for_prompt(realtime_articles)
+
+    return (
+        f"[작성 기준일]: {current_date_str} (현재 최신 시점)\n"
+        f"[작성 주제]: {topic}\n\n"
+        f"{realtime_news_block}\n\n"
+        f"### [🔍 네이버 블로그 포스팅 필수 작성 지침]:\n"
+        f"1. **실시간 수집 팩트 적극 인용**: 위에 실시간으로 수집된 최신 언론 보도의 핵심 내용, 발표 시점, 통계 수치를 본문에 자연스럽게 반영하여 글의 신뢰성을 극대화하세요.\n"
+        f"2. **작성 범위 및 최신성 필터**: {period_desc}.\n"
+        f"3. **오래된 기사(1~2년 전 과거 자료) 엄격 배제**: 1~2년 전({past_years_str})의 지난 기사나 이미 개정된 구형 정책을 현재의 사실처럼 인용하는 것은 절대 불가합니다.\n"
+        f"4. **본문 구성 및 시사점**: 최신 팩트와 현재 시장 상황, 실제 부동산 거래 및 매수/임차인에게 미치는 실질적인 영향과 대응 전략을 공인중개사의 신뢰감 있는 시각으로 알기 쉽게 브리핑해주세요."
+    )
+
+
+def _build_property_prompt(property_info: dict, topic: str, file_paths: list, cfg: dict):
+    """매물 소개 모드 프롬프트 및 파일 구성"""
+    now = datetime.now()
+    current_date_str = now.strftime("%Y년 %m월 %d일")
+    content = _prepare_property_content(property_info, topic, file_paths)
+
+    if cfg.get("enable_local_search", False):
+        loc = property_info.get("location", "") if property_info else ""
+        search_query = f"{loc} 부동산 개발 호재" if loc else (topic or "부동산 개발 호재")
+        local_news = fetch_hybrid_news(search_query, config=cfg, max_results=3)
+        news_block = format_news_for_prompt(local_news)
+
+        search_hint = (
+            f"\n\n### [주변 최신 호재 및 실시간 수집 자료]\n"
+            f"- 작성 기준일: {current_date_str}\n"
+            f"{news_block}\n"
+            f"- 위 최신 소식과 매물 소재지 주변의 최신 교통망(지하철·트램 등), 학군, 상권 개발 호재를 매물 입지 분석에 자연스럽게 녹여주세요."
+        )
+        if isinstance(content, list) and len(content) > 0:
+            content[0] = content[0] + search_hint
+        elif isinstance(content, str):
+            content = content + search_hint
+
+    return content
+
+
+def _prepare_sdk_contents(user_content):
+    """google.genai SDK 규격에 맞는 contents 배열 조립"""
+    from google.genai import types
+    if isinstance(user_content, list):
+        contents = [user_content[0]]
+        for item in user_content[1:]:
+            if isinstance(item, dict) and "data" in item:
+                contents.append(types.Part.from_bytes(data=item["data"], mime_type=item["mime_type"]))
+        return contents
+    return user_content
+
+
+class GeminiBlogService:
+    def __init__(self, api_key: str = "", model_name: str = DEFAULT_MODEL):
+        self.api_key = api_key
+        self.model_name = self._sanitize_model_name(model_name)
+
+    def _sanitize_model_name(self, model_name: str) -> str:
+        """모델명 정리 및 기본값 폴백"""
+        if not model_name or "2.5" in model_name or "1.5" in model_name:
+            return DEFAULT_MODEL
+        return model_name
+
+    def set_api_key(self, api_key: str):
+        self.api_key = api_key
+
+    def set_model(self, model_name: str):
+        self.model_name = self._sanitize_model_name(model_name)
+
+    def _build_system_prompt(self, tone_key: str, config: dict, is_property: bool = False) -> str:
+        """선택된 톤앤매너 및 사무소 정보로 시스템 프롬프트 조립"""
+        tone_info = TONE_PRESETS.get(tone_key, TONE_PRESETS["neighbor"])
+        tone_instruction = tone_info["instruction"] + _format_emoji_instruction(config.get("emoji_density", "normal"))
+        office_instruction = _format_office_info(config)
+        freshness_instruction = _format_freshness_instruction(config)
+
+        template = PROPERTY_PROMPT_TEMPLATE if is_property else SYSTEM_PROMPT_TEMPLATE
+        return template.format(
+            tone_instruction=tone_instruction,
+            office_info_instruction=office_instruction,
+            freshness_instruction=freshness_instruction
+        )
+
     def _prepare_user_content(
         self,
         mode: str,
@@ -260,63 +361,18 @@ class GeminiBlogService:
         property_info: dict = None,
         config: dict = None
     ):
-        """작성 모드에 따른 사용자 프롬프트 및 다중 파일/이미지 데이터 구성 (최신성 엄격 반영)"""
+        """작성 모드에 따른 사용자 프롬프트 및 다중 파일/이미지 데이터 구성"""
         file_paths = file_paths or []
         cfg = config or {}
-        now = datetime.now()
-        current_date_str = now.strftime("%Y년 %m월 %d일")
-        current_year = now.year
-        past_years_str = f"{current_year - 2}년~{current_year - 1}년"
 
         if mode == "property":
-            enable_local_search = cfg.get("enable_local_search", False)
-            content = _prepare_property_content(property_info, topic, file_paths)
-            if enable_local_search:
-                loc = property_info.get("location", "") if property_info else ""
-                search_query = f"{loc} 부동산 개발 호재" if loc else (topic or "부동산 개발 호재")
-                local_news = fetch_hybrid_news(search_query, config=cfg, max_results=3)
-                news_block = format_news_for_prompt(local_news)
-
-                search_hint = (
-                    f"\n\n### [주변 최신 호재 및 실시간 수집 자료]\n"
-                    f"- 작성 기준일: {current_date_str}\n"
-                    f"{news_block}\n"
-                    f"- 위 최신 소식과 매물 소재지 주변의 최신 교통망(지하철·트램 등), 학군, 상권 개발 호재를 매물 입지 분석에 자연스럽게 녹여주세요."
-                )
-                if isinstance(content, list) and len(content) > 0:
-                    content[0] = content[0] + search_hint
-                elif isinstance(content, str):
-                    content = content + search_hint
-            return content
-
+            return _build_property_prompt(property_info, topic, file_paths, cfg)
         if mode == "file" and file_paths:
             return _prepare_file_content(file_paths, topic)
-
         if mode == "news":
-            freshness_period = cfg.get("search_freshness", "recent_3m")
-            freshness_desc_map = {
-                "latest": "가장 최근 1주일~1개월 이내 보도된 초밀착 최신 기사 및 보도자료 최우선 수집",
-                "recent_3m": f"최근 3개월 이내({current_year}년 최신) 보도된 뉴스 및 발표자료 중심",
-                "this_year": f"올해({current_year}년) 발표된 최신 부동산 정책 및 언론 보도 중심",
-                "all": "주제와 관련된 주요 보도 및 최신 정책 분석"
-            }
-            period_desc = freshness_desc_map.get(freshness_period, freshness_desc_map["recent_3m"])
+            return _build_news_prompt(topic, cfg)
 
-            # 실시간 하이브리드 뉴스 수집 (네이버 API 또는 Google News RSS)
-            realtime_articles = fetch_hybrid_news(topic, config=cfg, max_results=5)
-            realtime_news_block = format_news_for_prompt(realtime_articles)
-
-            return (
-                f"[작성 기준일]: {current_date_str} (현재 최신 시점)\n"
-                f"[작성 주제]: {topic}\n\n"
-                f"{realtime_news_block}\n\n"
-                f"### [🔍 네이버 블로그 포스팅 필수 작성 지침]:\n"
-                f"1. **실시간 수집 팩트 적극 인용**: 위에 실시간으로 수집된 최신 언론 보도의 핵심 내용, 발표 시점, 통계 수치를 본문에 자연스럽게 반영하여 글의 신뢰성을 극대화하세요.\n"
-                f"2. **작성 범위 및 최신성 필터**: {period_desc}.\n"
-                f"3. **오래된 기사(1~2년 전 과거 자료) 엄격 배제**: 1~2년 전({past_years_str})의 지난 기사나 이미 개정된 구형 정책을 현재의 사실처럼 인용하는 것은 절대 불가합니다.\n"
-                f"4. **본문 구성 및 시사점**: 최신 팩트와 현재 시장 상황, 실제 부동산 거래 및 매수/임차인에게 미치는 실질적인 영향과 대응 전략을 공인중개사의 신뢰감 있는 시각으로 알기 쉽게 브리핑해주세요."
-            )
-
+        current_date_str = datetime.now().strftime("%Y년 %m월 %d일")
         return f"다음 주제 및 내용으로 네이버 블로그 글을 작성해주세요 (작성 기준일: {current_date_str}):\n\n[주제/메모]: {topic}"
 
     def generate_blog_post(
@@ -333,7 +389,6 @@ class GeminiBlogService:
         if not self.api_key:
             raise ValueError("Gemini API 키가 설정되지 않았습니다. 상단 '환경 설정'에서 키를 입력해주세요.")
 
-        # 단일 file_path 지원 호환성 처리
         paths = list(file_paths) if file_paths else []
         if file_path and file_path not in paths:
             paths.insert(0, file_path)
@@ -367,7 +422,6 @@ class GeminiBlogService:
             if sup not in models_to_try:
                 models_to_try.append(sup)
 
-        # 지원 중단/만료 모델 엄격 필터링
         models_to_try = [m for m in models_to_try if "2.5" not in m and "1.5" not in m]
         if not models_to_try:
             models_to_try = list(SUPPORTED_MODELS)
@@ -380,10 +434,8 @@ class GeminiBlogService:
             except Exception as err:
                 last_err = err
                 err_str = str(err).lower()
-                # 429(할당량 초과), 503(용량 부족/과부하), 404(모델 만료) 등 모델별 오류 시 다음 안정 모델로 즉시 자동 전환 재시도
                 if any(k in err_str for k in ["429", "resource_exhausted", "quota", "rate_limit", "503", "unavailable", "404", "not_found", "no longer available"]):
                     continue
-                # 인증 오류(401)나 요청 오류(400)는 모든 모델에서 동일하므로 중단
                 if "401" in err_str or "unauthenticated" in err_str or "400" in err_str or "invalid_argument" in err_str:
                     break
 
@@ -403,17 +455,9 @@ class GeminiBlogService:
             temperature=0.7,
             tools=tools
         )
-
-        if isinstance(user_content, list):
-            # 첫 번째는 텍스트 프롬프트, 나머지는 이미지 파트들
-            contents = [user_content[0]]
-            for item in user_content[1:]:
-                if isinstance(item, dict) and "data" in item:
-                    contents.append(types.Part.from_bytes(data=item["data"], mime_type=item["mime_type"]))
-        else:
-            contents = user_content
-
+        contents = _prepare_sdk_contents(user_content)
         target_model = self.model_name if self.model_name.startswith("gemini-") else DEFAULT_MODEL
+
         try:
             response = client.models.generate_content(
                 model=target_model,
@@ -421,8 +465,6 @@ class GeminiBlogService:
                 config=gen_config
             )
         except Exception as err:
-            # Google Search Grounding은 무료 티어에서 429 RESOURCE_EXHAUSTED(할당량 없음)를 유발함
-            # 검색 툴 호출 중 429/할당량 오류 시, 검색 툴을 해제하고 고성능 표준 생성으로 즉시 자동 전환
             err_str = str(err).lower()
             if enable_grounding and any(k in err_str for k in ["429", "resource_exhausted", "quota", "rate_limit"]):
                 gen_config_no_tools = types.GenerateContentConfig(
