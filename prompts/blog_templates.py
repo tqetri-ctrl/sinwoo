@@ -74,6 +74,9 @@ SYSTEM_PROMPT_TEMPLATE = """
 4. **공인중개사 맞춤 마무리 & CTA**:
 {office_info_instruction}
 
+5. **최신성 및 정보 정확성 원칙 (필수 준수)**:
+{freshness_instruction}
+
 ---
 
 ### [출력 형식 규칙]
@@ -124,6 +127,9 @@ PROPERTY_PROMPT_TEMPLATE = """
 
 6. **공인중개사 맞춤 마무리 & CTA (문의 유도)**:
 {office_info_instruction}
+
+7. **최신성 및 정보 정확성 원칙**:
+{freshness_instruction}
 
 ---
 
