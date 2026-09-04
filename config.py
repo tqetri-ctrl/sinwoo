@@ -24,6 +24,9 @@ DEFAULT_CONFIG = {
     "office_location": "",       # 사무소 위치/주소
     "custom_signature": "",      # 글 하단에 들어갈 맞춤 서명 문구
     "include_office_info": True,
+    "search_freshness": "recent_3m", # latest (최신 1개월), recent_3m (최근 3개월), this_year (올해), all (제한없음)
+    "include_source_date": True,  # 글 본문에 발표 시점/최신 일자 명시 여부
+    "enable_local_search": False, # 매물 소개 시 주변 최신 호재 실시간 검색 연동 여부
     "theme": "clean_light"
 }
 

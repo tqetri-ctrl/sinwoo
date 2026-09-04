@@ -1,6 +1,7 @@
 import io
 import os
 import re
+from datetime import datetime
 from prompts.blog_templates import TONE_PRESETS, SYSTEM_PROMPT_TEMPLATE, PROPERTY_PROMPT_TEMPLATE
 from services.file_parser import extract_text_from_file
 
@@ -39,6 +40,30 @@ def _format_office_info(config: dict) -> str:
         return "포스팅 마지막 맺음말에 독자의 공감과 댓글/이웃 추가를 유도하는 따뜻한 마무리 인사를 작성하세요."
 
     return "포스팅 마지막 맺음말 부분에 아래의 공인중개사 정보를 신뢰감 있고 친절하게 안내하며 독자의 상담/방문 예약을 유도하세요:\n" + "\n".join(parts)
+
+
+def _format_freshness_instruction(config: dict) -> str:
+    """블로그 글의 최신성 유지를 위한 작성 기준일 및 과거 자료 배제 원칙 반환"""
+    now = datetime.now()
+    current_date_str = now.strftime("%Y년 %m월 %d일")
+    current_year = now.year
+    past_years_str = f"{current_year - 2}년, {current_year - 1}년"
+    include_source_date = config.get("include_source_date", True) if config else True
+
+    date_citation_rule = (
+        f"\n- **발표 시점/출처 명시**: 독자가 최신 정보임을 바로 신뢰할 수 있도록 본문에서 정책, 금리, 규제, 실거래 통계를 언급할 때 "
+        f"발표 시점(예: '{current_year}년 최근 발표', '{current_year}년 {now.month}월 기준' 등)을 자연스럽게 표기하세요."
+        if include_source_date else ""
+    )
+
+    return (
+        f"- **현재 작성 기준일**: 오늘은 **{current_date_str}**입니다. 블로그의 모든 내용과 시장 해설은 반드시 이 시점을 기준으로 최신 상태를 유지해야 합니다.\n"
+        f"- **오래된 과거 자료(1~2년 전 기사/통계 등) 절대 인용 금지**:\n"
+        f"  * 1~2년 전(예: {past_years_str} 등)의 지난 기사나 이미 개정/폐기된 구(舊) 정책·제도 규정을 현재의 최신 소식인 것처럼 작성하는 것을 엄격히 금지합니다.\n"
+        f"  * 인터넷 검색 결과나 참고 자료를 활용할 때 반드시 **기사의 발행 일자 및 정책 발표 시점**을 엄격하게 확인하세요.\n"
+        f"  * 가장 최근({current_year}년 최신 발표 및 최근 수주일~수개월 이내 보도)에 나온 확실한 팩트와 최신 실거래/시장 동향을 최우선으로 선별하여 반영하세요."
+        f"{date_citation_rule}"
+    )
 
 
 def _extract_titles(text: str) -> list:
@@ -203,35 +228,75 @@ class GeminiBlogService:
         self.model_name = self._sanitize_model_name(model_name)
 
     def _build_system_prompt(self, tone_key: str, config: dict, is_property: bool = False) -> str:
-        """선택된 톤앤매너 및 사무소 정보로 시스템 프롬프트 조립"""
+        """선택된 톤앤매너 및 사무소 정보, 최신성 지침으로 시스템 프롬프트 조립"""
+        cfg = config or {}
         tone_info = TONE_PRESETS.get(tone_key, TONE_PRESETS["neighbor"])
-        tone_instruction = tone_info["instruction"] + _format_emoji_instruction(config.get("emoji_density", "normal"))
-        office_instruction = _format_office_info(config)
+        tone_instruction = tone_info["instruction"] + _format_emoji_instruction(cfg.get("emoji_density", "normal"))
+        office_instruction = _format_office_info(cfg)
+        freshness_instruction = _format_freshness_instruction(cfg)
 
         template = PROPERTY_PROMPT_TEMPLATE if is_property else SYSTEM_PROMPT_TEMPLATE
         return template.format(
             tone_instruction=tone_instruction,
-            office_info_instruction=office_instruction
+            office_info_instruction=office_instruction,
+            freshness_instruction=freshness_instruction
         )
 
-    def _prepare_user_content(self, mode: str, topic: str = "", file_paths: list = None, property_info: dict = None):
-        """작성 모드에 따른 사용자 프롬프트 및 다중 파일/이미지 데이터 구성"""
+    def _prepare_user_content(
+        self,
+        mode: str,
+        topic: str = "",
+        file_paths: list = None,
+        property_info: dict = None,
+        config: dict = None
+    ):
+        """작성 모드에 따른 사용자 프롬프트 및 다중 파일/이미지 데이터 구성 (최신성 엄격 반영)"""
         file_paths = file_paths or []
+        cfg = config or {}
+        now = datetime.now()
+        current_date_str = now.strftime("%Y년 %m월 %d일")
+        current_year = now.year
+        past_years_str = f"{current_year - 2}년~{current_year - 1}년"
 
         if mode == "property":
-            return _prepare_property_content(property_info, topic, file_paths)
+            enable_local_search = cfg.get("enable_local_search", False)
+            content = _prepare_property_content(property_info, topic, file_paths)
+            if enable_local_search:
+                search_hint = (
+                    f"\n\n### [주변 최신 호재 및 시세 인터넷 실시간 검색 지침]\n"
+                    f"- 작성 기준일: {current_date_str}\n"
+                    f"- 매물 소재지 주변의 가장 최신({current_year}년 최근) 교통망 호재(지하철·도로망 개통/착공 등), 학군, 상권 개발 소식 및 최신 실거래가 동향을 검색하여 입지 분석에 자연스럽게 녹여주세요."
+                )
+                if isinstance(content, list) and len(content) > 0:
+                    content[0] = content[0] + search_hint
+                elif isinstance(content, str):
+                    content = content + search_hint
+            return content
 
         if mode == "file" and file_paths:
             return _prepare_file_content(file_paths, topic)
 
         if mode == "news":
+            freshness_period = cfg.get("search_freshness", "recent_3m")
+            freshness_desc_map = {
+                "latest": "가장 최근 1주일~1개월 이내 보도된 초밀착 최신 기사 및 보도자료 최우선 수집",
+                "recent_3m": f"최근 3개월 이내({current_year}년 최신) 보도된 뉴스 및 발표자료 중심",
+                "this_year": f"올해({current_year}년) 발표된 최신 부동산 정책 및 언론 보도 중심",
+                "all": "주제와 관련된 주요 보도 및 최신 정책 분석"
+            }
+            period_desc = freshness_desc_map.get(freshness_period, freshness_desc_map["recent_3m"])
+
             return (
-                f"최신 인터넷 뉴스 기사, 언론 보도, 부동산 정책 발표 자료를 검색 및 바탕으로 하여 다음 주제에 대한 네이버 블로그 글을 작성해주세요.\n\n"
+                f"[작성 기준일]: {current_date_str} (현재 최신 시점)\n"
                 f"[작성 주제]: {topic}\n\n"
-                f"최신 팩트와 시장 상황, 실제 부동산 거래 및 매수/임차인에게 미치는 영향을 명확히 짚어주세요."
+                f"### [🔍 웹 검색 및 최신 자료 수집 필수 지침]:\n"
+                f"1. **최신 검색 쿼리 수행**: 반드시 '{topic} {current_year}년 최신', '{topic} {now.month}월 보도' 등 현재 시점({current_year}년) 키워드로 인터넷 뉴스 기사, 언론 보도, 국토교통부/정부 정책 발표 자료를 검색하세요.\n"
+                f"2. **검색 범위 및 최신성 필터**: {period_desc}.\n"
+                f"3. **오래된 기사(1~2년 전 과거 자료) 엄격 배제**: 1~2년 전({past_years_str})의 지난 기사나 이미 개정된 구형 정책을 현재의 사실처럼 인용하는 것은 절대 불가합니다. 검색 결과 중 발행 일자가 가장 최근인 보도를 엄격히 선별하세요.\n"
+                f"4. **본문 구성 및 시사점**: 최신 팩트와 현재 시장 상황, 실제 부동산 거래 및 매수/임차인에게 미치는 실질적인 영향과 대응 전략을 공인중개사의 신뢰감 있는 시각으로 알기 쉽게 브리핑해주세요."
             )
 
-        return f"다음 주제 및 내용으로 네이버 블로그 글을 작성해주세요:\n\n[주제/메모]: {topic}"
+        return f"다음 주제 및 내용으로 네이버 블로그 글을 작성해주세요 (작성 기준일: {current_date_str}):\n\n[주제/메모]: {topic}"
 
     def generate_blog_post(
         self,
@@ -254,10 +319,18 @@ class GeminiBlogService:
 
         cfg = config or {}
         is_property_mode = (mode == "property")
-        system_instruction = self._build_system_prompt(tone_key, cfg, is_property=is_property_mode)
-        user_content = self._prepare_user_content(mode, topic=topic, file_paths=paths, property_info=property_info)
+        enable_grounding = (mode == "news") or (is_property_mode and cfg.get("enable_local_search", False))
 
-        raw_text = self._call_gemini_api(system_instruction, user_content, enable_grounding=(mode == "news"))
+        system_instruction = self._build_system_prompt(tone_key, cfg, is_property=is_property_mode)
+        user_content = self._prepare_user_content(
+            mode,
+            topic=topic,
+            file_paths=paths,
+            property_info=property_info,
+            config=cfg
+        )
+
+        raw_text = self._call_gemini_api(system_instruction, user_content, enable_grounding=enable_grounding)
 
         return {
             "titles": _extract_titles(raw_text),
@@ -272,7 +345,7 @@ class GeminiBlogService:
             return self._call_google_genai_sdk(system_prompt, user_content, enable_grounding)
         except Exception as err_sdk1:
             try:
-                return self._call_legacy_genai_sdk(system_prompt, user_content)
+                return self._call_legacy_genai_sdk(system_prompt, user_content, enable_grounding)
             except Exception as err_sdk2:
                 raise RuntimeError(f"Gemini API 호출 오류:\n1) {err_sdk1}\n2) {err_sdk2}")
 
@@ -311,17 +384,26 @@ class GeminiBlogService:
             return response.text
         raise RuntimeError("google.genai SDK에서 텍스트 응답을 받지 못했습니다.")
 
-    def _call_legacy_genai_sdk(self, system_prompt: str, user_content) -> str:
+    def _call_legacy_genai_sdk(self, system_prompt: str, user_content, enable_grounding: bool = False) -> str:
         """레거시 google.generativeai SDK 폴백 실행"""
         # pyrefly: ignore [missing-import]
         import google.generativeai as legacy_genai
         legacy_genai.configure(api_key=self.api_key)
 
-        model = legacy_genai.GenerativeModel(
-            model_name=self.model_name if "gemini" in self.model_name else "gemini-1.5-flash",
-            generation_config={"temperature": 0.7},
-            system_instruction=system_prompt
-        )
+        tools = [{"google_search_retrieval": {}}] if enable_grounding else None
+        try:
+            model = legacy_genai.GenerativeModel(
+                model_name=self.model_name if "gemini" in self.model_name else "gemini-1.5-flash",
+                generation_config={"temperature": 0.7},
+                system_instruction=system_prompt,
+                tools=tools
+            )
+        except Exception:
+            model = legacy_genai.GenerativeModel(
+                model_name=self.model_name if "gemini" in self.model_name else "gemini-1.5-flash",
+                generation_config={"temperature": 0.7},
+                system_instruction=system_prompt
+            )
 
         if isinstance(user_content, list):
             # pyrefly: ignore [missing-import]

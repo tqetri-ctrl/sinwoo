@@ -9,6 +9,7 @@
 
 import os
 import sys
+from datetime import datetime
 # pyrefly: ignore [missing-import]
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -414,6 +415,11 @@ class MainWindow(QMainWindow):
         self.list_photos.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         tab_prop_layout.addWidget(self.list_photos)
 
+        self.chk_prop_local_search = QCheckBox("🌐 주변 최신 개발 호재 및 시세 실시간 검색 반영 (최신성 강화)")
+        self.chk_prop_local_search.setChecked(self.config.get("enable_local_search", False))
+        self.chk_prop_local_search.setStyleSheet("color: #475569; font-size: 12px; margin-top: 4px;")
+        tab_prop_layout.addWidget(self.chk_prop_local_search)
+
         self.input_tab.addTab(tab_property, "🏠 현장 사진 매물 소개")
 
         # ====================================================
@@ -422,17 +428,68 @@ class MainWindow(QMainWindow):
         tab_news = QWidget()
         tab_news_layout = QVBoxLayout(tab_news)
         tab_news_layout.setContentsMargins(12, 12, 12, 12)
-        tab_news_layout.setSpacing(6)
+        tab_news_layout.setSpacing(8)
 
+        # 상단 가이드 & 오늘 작성 기준일 배지
+        news_header = QHBoxLayout()
         lbl_news_guide = QLabel("💡 작성하고 싶은 부동산 소식/주제를 적어주세요. 인터넷 최신 기사를 알아서 검색해 분석합니다.")
         lbl_news_guide.setStyleSheet("color: #475569; font-size: 12px;")
         lbl_news_guide.setWordWrap(True)
-        tab_news_layout.addWidget(lbl_news_guide)
+        news_header.addWidget(lbl_news_guide, 1)
+
+        today_str = datetime.now().strftime("%Y년 %m월 %d일")
+        lbl_date_badge = QLabel(f"📅 작성 기준일: {today_str}")
+        lbl_date_badge.setStyleSheet(
+            "background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; "
+            "font-size: 11px; padding: 4px 10px; border-radius: 12px; border: 1px solid #BFDBFE;"
+        )
+        news_header.addWidget(lbl_date_badge)
+        tab_news_layout.addLayout(news_header)
 
         self.edit_news_topic = QTextEdit()
-        self.edit_news_topic.setPlaceholderText("예시:\n- 2026년 신혼부부/다자녀 특별공급 청약 제도 개편 핵심 정리\n- 최근 서울 및 수도권 아파트 실거래가 및 전세 시장 동향\n- 우리 동네(OO동) 재건축 추진 현황 및 상가 입지 분석")
-        self.edit_news_topic.setFixedHeight(120)
+        cur_year = datetime.now().year
+        self.edit_news_topic.setPlaceholderText(
+            f"예시:\n"
+            f"- {cur_year}년 신혼부부/다자녀 특별공급 청약 제도 개편 핵심 정리\n"
+            f"- 최근 서울 및 수도권 아파트 실거래가 및 전세 시장 동향\n"
+            f"- 우리 동네(OO동) 재건축 추진 현황 및 상가 입지 분석"
+        )
+        self.edit_news_topic.setFixedHeight(100)
         tab_news_layout.addWidget(self.edit_news_topic)
+
+        # 자료 최신성 및 검색 제어 바
+        freshness_bar = QHBoxLayout()
+        freshness_bar.setSpacing(10)
+
+        lbl_freshness = QLabel("🔍 자료 최신성:")
+        lbl_freshness.setStyleSheet("font-weight: bold; color: #334155; font-size: 12px;")
+        freshness_bar.addWidget(lbl_freshness)
+
+        self.combo_freshness = QComboBox()
+        self.combo_freshness.addItems([
+            "⚡ 최근 3개월 이내 최신 자료 (추천)",
+            "🔥 초밀착 최신 (최근 1주일~1개월 보도 최우선)",
+            f"📆 올해({cur_year}년) 최신 발표/정책",
+            "🌐 기간 제한 없이 검색"
+        ])
+        current_freshness = self.config.get("search_freshness", "recent_3m")
+        freshness_idx_map = {"recent_3m": 0, "latest": 1, "this_year": 2, "all": 3}
+        self.combo_freshness.setCurrentIndex(freshness_idx_map.get(current_freshness, 0))
+        freshness_bar.addWidget(self.combo_freshness)
+
+        self.chk_source_date = QCheckBox("발표 시점/일자 본문 표기")
+        self.chk_source_date.setChecked(self.config.get("include_source_date", True))
+        self.chk_source_date.setToolTip("본문에 '2026년 최근 발표 기준', '최근 보도에 따르면' 등 최신 시점을 명시하여 신뢰도를 높입니다.")
+        self.chk_source_date.setStyleSheet("color: #475569; font-size: 12px;")
+        freshness_bar.addWidget(self.chk_source_date)
+
+        freshness_bar.addStretch()
+        tab_news_layout.addLayout(freshness_bar)
+
+        lbl_news_freshness_notice = QLabel("※ 1~2년 전의 오래된 기사나 지난 정책은 엄격히 배제하고, 가장 최신의 사실(Fact)만 선별합니다.")
+        lbl_news_freshness_notice.setStyleSheet("color: #059669; font-size: 11px;")
+        tab_news_layout.addWidget(lbl_news_freshness_notice)
+
         self.input_tab.addTab(tab_news, "📰 부동산 뉴스/정보")
 
         # ====================================================
@@ -709,6 +766,7 @@ class MainWindow(QMainWindow):
             "features": features,
             "memo": memo
         }
+        self.config["enable_local_search"] = self.chk_prop_local_search.isChecked()
         return {
             "mode": "property",
             "topic": memo,
@@ -723,6 +781,12 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "주제 입력 필요", "작성하고 싶은 부동산 소식이나 주제를 간단히 입력해주세요!")
             self.edit_news_topic.setFocus()
             return None
+
+        freshness_map = {0: "recent_3m", 1: "latest", 2: "this_year", 3: "all"}
+        selected_freshness = freshness_map.get(self.combo_freshness.currentIndex(), "recent_3m")
+        self.config["search_freshness"] = selected_freshness
+        self.config["include_source_date"] = self.chk_source_date.isChecked()
+
         return {
             "mode": "news",
             "topic": topic,
@@ -746,11 +810,13 @@ class MainWindow(QMainWindow):
     def _get_loading_message(self, mode: str, photo_count: int) -> str:
         """모드별 진행 상태 메시지 반환"""
         if mode == "property":
+            if self.config.get("enable_local_search", False):
+                return "🏠 현장 사진과 주변 최신 개발 호재/시세를 실시간 검색하여 룸투어 글을 작성하고 있습니다..."
             if photo_count > 0:
                 return f"🏠 현장 사진 {photo_count}장과 매물 정보를 정밀 분석하여 룸투어 글을 작성하고 있습니다..."
             return "🏠 매물 스펙을 바탕으로 네이버 블로그 추천 매물 포스팅을 작성하고 있습니다..."
         if mode == "news":
-            return "🔍 최신 인터넷 기사를 검색하고 전문 블로그 글을 작성하고 있습니다..."
+            return "🔍 최신 인터넷 기사를 실시간 검색하고 최신 정보를 분석하여 블로그 글을 작성하고 있습니다..."
         return "📄 첨부자료 내용을 정밀 분석하여 블로그 글을 작성하고 있습니다..."
 
     def on_start_generate(self):
@@ -776,6 +842,7 @@ class MainWindow(QMainWindow):
         density_idx = self.combo_density.currentIndex()
         density_map = {0: "normal", 1: "high", 2: "low"}
         self.config["emoji_density"] = density_map.get(density_idx, "normal")
+        save_config(self.config)
 
         mode = payload["mode"]
         file_paths = payload["file_paths"]
