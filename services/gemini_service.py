@@ -18,6 +18,7 @@ SECTION_BODY = "[블로그 본문]"
 SECTION_TAGS = "[네이버 블로그 추천 태그]"
 DEFAULT_FALLBACK_TITLE = "공인중개사가 전하는 부동산 핵심 소식과 현황 브리핑"
 DEFAULT_FALLBACK_TAGS = ["#부동산", "#공인중개사", "#부동산소식", "#부동산현황", "#부동산정보"]
+DATE_FORMAT_KOREAN = "%Y년 %m월 %d일"
 
 
 def _format_emoji_instruction(density: str) -> str:
@@ -52,7 +53,7 @@ def _format_office_info(config: dict) -> str:
 def _format_freshness_instruction(config: dict) -> str:
     """블로그 글의 최신성 유지를 위한 작성 기준일 및 과거 자료 배제 원칙 반환"""
     now = datetime.now()
-    current_date_str = now.strftime("%Y년 %m월 %d일")
+    current_date_str = now.strftime(DATE_FORMAT_KOREAN)
     current_year = now.year
     past_years_str = f"{current_year - 2}년, {current_year - 1}년"
     include_source_date = config.get("include_source_date", True) if config else True
@@ -255,7 +256,7 @@ class GeminiBlogService:
 def _build_news_prompt(topic: str, cfg: dict) -> str:
     """뉴스 기사 브리핑 모드 프롬프트 구성"""
     now = datetime.now()
-    current_date_str = now.strftime("%Y년 %m월 %d일")
+    current_date_str = now.strftime(DATE_FORMAT_KOREAN)
     current_year = now.year
     past_years_str = f"{current_year - 2}년~{current_year - 1}년"
 
@@ -287,7 +288,7 @@ def _build_news_prompt(topic: str, cfg: dict) -> str:
 def _build_property_prompt(property_info: dict, topic: str, file_paths: list, cfg: dict):
     """매물 소개 모드 프롬프트 및 파일 구성"""
     now = datetime.now()
-    current_date_str = now.strftime("%Y년 %m월 %d일")
+    current_date_str = now.strftime(DATE_FORMAT_KOREAN)
     content = _prepare_property_content(property_info, topic, file_paths)
 
     if cfg.get("enable_local_search", False):
@@ -312,6 +313,7 @@ def _build_property_prompt(property_info: dict, topic: str, file_paths: list, cf
 
 def _prepare_sdk_contents(user_content):
     """google.genai SDK 규격에 맞는 contents 배열 조립"""
+    # pyrefly: ignore [missing-import]
     from google.genai import types
     if isinstance(user_content, list):
         contents = [user_content[0]]
@@ -372,7 +374,7 @@ class GeminiBlogService:
         if mode == "news":
             return _build_news_prompt(topic, cfg)
 
-        current_date_str = datetime.now().strftime("%Y년 %m월 %d일")
+        current_date_str = datetime.now().strftime(DATE_FORMAT_KOREAN)
         return f"다음 주제 및 내용으로 네이버 블로그 글을 작성해주세요 (작성 기준일: {current_date_str}):\n\n[주제/메모]: {topic}"
 
     def generate_blog_post(

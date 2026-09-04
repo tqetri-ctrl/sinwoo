@@ -72,7 +72,7 @@ def _parse_rss_item(item) -> dict:
     raw_title = title_elem.text if title_elem is not None and title_elem.text else ""
     clean_title = _clean_html_tags(raw_title)
     if not clean_title:
-        return None
+        return {}
 
     clean_title, source_name = _extract_source_and_title(clean_title, source_elem)
     raw_desc = desc_elem.text if desc_elem is not None and desc_elem.text else ""
