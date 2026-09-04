@@ -402,11 +402,29 @@ class GeminiBlogService:
             contents = user_content
 
         target_model = self.model_name if self.model_name.startswith("gemini-") else DEFAULT_MODEL
-        response = client.models.generate_content(
-            model=target_model,
-            contents=contents,
-            config=gen_config
-        )
+        try:
+            response = client.models.generate_content(
+                model=target_model,
+                contents=contents,
+                config=gen_config
+            )
+        except Exception as err:
+            # Google Search Grounding은 무료 티어에서 429 RESOURCE_EXHAUSTED(할당량 없음)를 유발함
+            # 검색 툴 호출 중 429/할당량 오류 시, 검색 툴을 해제하고 고성능 표준 생성으로 즉시 자동 전환
+            err_str = str(err).lower()
+            if enable_grounding and any(k in err_str for k in ["429", "resource_exhausted", "quota", "rate_limit"]):
+                gen_config_no_tools = types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.7,
+                    tools=None
+                )
+                response = client.models.generate_content(
+                    model=target_model,
+                    contents=contents,
+                    config=gen_config_no_tools
+                )
+            else:
+                raise err
 
         if response and response.text:
             return response.text
