@@ -111,17 +111,17 @@ def clean_body_instructions(text: str) -> str:
         trimmed = line.strip()
 
         # 1. 독자에게 무의미한 독립된 지도 검색/첨부 안내 라인은 본문에서 완전 제외 (UI 가이드로 이동)
-        if re.search(r'\[(?:🗺️\s*)?네이버\s*지도\s*첨부\s*추천.*?\]', trimmed):
+        if re.search(r'\[(?:🗺️\s*)?네이버\s*지도\s*첨부\s*추천[^\]]*\]', trimmed):
             continue
 
         # 2. 플레이스홀더 내부의 복사 지시문 정제: [🗺️ ... 위치도: 상단 ... 후 붙여넣기] -> [🗺️ 위치도]
         cleaned_line = re.sub(
-            r'\[(🗺️\s*(?:정비구역|매물|대상지)?\s*(?:/\s*매물)?\s*위치도)\s*:\s*상단\s*[\'"].*?[\'"].*?\]',
+            r'\[(🗺️[^:\]]*위치도)\s*:\s*상단[^\]]*\]',
             r'[\1]',
             line
         )
-        cleaned_line = re.sub(r'\(상단\s*[\'"].*?[\'"].*?붙여넣기\)', '', cleaned_line)
-        cleaned_line = re.sub(r'\[(?:🗺️\s*)?네이버\s*지도\s*첨부\s*추천.*?\]', '', cleaned_line)
+        cleaned_line = re.sub(r'\(상단[^)]*붙여넣기\)', '', cleaned_line)
+        cleaned_line = re.sub(r'\[(?:🗺️\s*)?네이버\s*지도\s*첨부\s*추천[^\]]*\]', '', cleaned_line)
 
         if cleaned_line.strip() or not line.strip():
             lines.append(cleaned_line)
