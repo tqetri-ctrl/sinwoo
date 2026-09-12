@@ -27,6 +27,7 @@ from PyQt6.QtGui import QFont, QIcon, QClipboard
 from config import load_config, save_config
 from prompts.blog_templates import TONE_PRESETS
 from services.gemini_service import GeminiBlogService
+from services.news_search_service import fetch_yonhap_realestate_news
 from ui.styles import MAIN_STYLESHEET, generate_blog_preview_html
 
 DEFAULT_MODEL_NAME = "gemini-3.6-flash"
@@ -35,6 +36,19 @@ FLASH_35_LITE_MODEL_NAME = "gemini-3.5-flash-lite"
 FLASH_31_LITE_MODEL_NAME = "gemini-3.1-flash-lite"
 MUTED_TEXT_STYLE = "color: #475569; font-size: 13px;"
 CARD_HEADER_STYLE = "font-weight: bold; font-size: 16px; color: #1E293B;"
+GRID_LABEL_STYLE = "font-weight: 600; color: #334155; font-size: 13px;"
+
+
+class YonhapNewsLoadThread(QThread):
+    """연합뉴스 경제 RSS에서 부동산 속보 피드를 백그라운드 비동기로 수집하는 스레드"""
+    news_loaded_signal = pyqtSignal(list)
+
+    def run(self):
+        try:
+            articles = fetch_yonhap_realestate_news(max_results=12)
+            self.news_loaded_signal.emit(articles)
+        except Exception:
+            self.news_loaded_signal.emit([])
 
 
 class BlogGenerationThread(QThread):
@@ -261,21 +275,24 @@ class MainWindow(QMainWindow):
         self.current_result = None
         self.property_photos = []  # 매물 탭 현장 사진 목록
         self.selected_doc_files = []  # 문서/자료 탭 첨부파일 목록
+        self.yonhap_articles = []  # 연합뉴스 실시간 부동산 속보 목록
+        self.yonhap_thread = None
 
         self.init_window()
         self.init_ui()
         self.update_api_status_badge()
+        self.load_yonhap_news()
 
     def init_window(self):
         self.setWindowTitle("신우 공인중개사 | AI 네이버 블로그 글 생성기")
         self.setStyleSheet(MAIN_STYLESHEET)
 
-        # 1920x1080 등 대다수 FHD 환경에서 한눈에 꽉 차고 시원하게 보이도록 화면 해상도 기반 최적 크기 계산 (약 85~88%)
+        # 1920x1080 FHD 및 다양한 스케일 환경에서 쾌적하게 꽉 차도록 넉넉한 창 크기 설정
         screen = QApplication.primaryScreen()
         if screen:
             avail_geo = screen.availableGeometry()
-            target_w = min(1560, max(1280, int(avail_geo.width() * 0.86)))
-            target_h = min(960, max(800, int(avail_geo.height() * 0.88)))
+            target_w = max(1380, min(1680, int(avail_geo.width() * 0.90)))
+            target_h = max(860, min(1000, int(avail_geo.height() * 0.90)))
             self.resize(target_w, target_h)
 
             # 화면 중앙 정렬
@@ -285,7 +302,7 @@ class MainWindow(QMainWindow):
         else:
             self.resize(1500, 880)
 
-        self.setMinimumSize(920, 600)
+        self.setMinimumSize(960, 640)
 
     def init_ui(self):
         main_widget = QWidget()
@@ -312,10 +329,12 @@ class MainWindow(QMainWindow):
         right_panel = self.create_right_result_panel()
         self.splitter.addWidget(right_panel)
 
-        # 1920x1080 FHD 기준 좌측 입력창과 우측 미리보기가 모두 넉넉하게 보이도록 최적 비율 설정
-        self.splitter.setSizes([600, 920])
-        self.splitter.setStretchFactor(0, 4)
-        self.splitter.setStretchFactor(1, 6)
+        # 좌측 입력창과 우측 미리보기가 5:5 비율로 균등하게 넉넉한 폭을 갖도록 설정
+        self.splitter.setSizes([700, 780])
+        self.splitter.setStretchFactor(0, 5)
+        self.splitter.setStretchFactor(1, 5)
+        self.splitter.setCollapsible(0, False)
+        self.splitter.setCollapsible(1, False)
         main_layout.addWidget(self.splitter)
 
     def resizeEvent(self, event):
@@ -327,13 +346,13 @@ class MainWindow(QMainWindow):
         if width < 960:
             if self.splitter.orientation() != Qt.Orientation.Vertical:
                 self.splitter.setOrientation(Qt.Orientation.Vertical)
-                self.splitter.setSizes([380, 450])
+                self.splitter.setSizes([420, 480])
             self.lbl_subtitle.setVisible(False)
         else:
             # 960px 이상 (일반 가로 모니터): 좌우 2단 컬럼으로 자동 복귀
             if self.splitter.orientation() != Qt.Orientation.Horizontal:
                 self.splitter.setOrientation(Qt.Orientation.Horizontal)
-                self.splitter.setSizes([600, 920])
+                self.splitter.setSizes([width // 2, width // 2])
             self.lbl_subtitle.setVisible(True)
 
     def create_header(self) -> QWidget:
@@ -392,6 +411,7 @@ class MainWindow(QMainWindow):
     def create_left_input_panel(self) -> QWidget:
         """좌측 1-2-3단계 입력 영역 (상단 스크롤 + 하단 고정 생성 버튼)"""
         container = QWidget()
+        container.setMinimumWidth(480)
         outer_layout = QVBoxLayout(container)
         outer_layout.setContentsMargins(0, 0, 4, 0)
         outer_layout.setSpacing(6)
@@ -400,9 +420,10 @@ class MainWindow(QMainWindow):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
         scroll_content = QWidget()
+        scroll_content.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout = QVBoxLayout(scroll_content)
         layout.setContentsMargins(0, 0, 4, 0)
         layout.setSpacing(8)
@@ -413,14 +434,14 @@ class MainWindow(QMainWindow):
         card_step1 = QFrame()
         card_step1.setObjectName("CardFrame")
         layout_step1 = QVBoxLayout(card_step1)
-        layout_step1.setContentsMargins(12, 10, 12, 10)
+        layout_step1.setContentsMargins(10, 8, 10, 8)
         layout_step1.setSpacing(8)
 
         header_step1 = QHBoxLayout()
         header_step1.setSpacing(8)
         badge1 = QLabel("1단계")
         badge1.setObjectName("StepBadge")
-        title1 = QLabel("글감 종류 선택:")
+        title1 = QLabel("글감 선택:")
         title1.setObjectName("StepTitle")
         header_step1.addWidget(badge1)
         header_step1.addWidget(title1)
@@ -428,15 +449,15 @@ class MainWindow(QMainWindow):
         # 드롭다운 선택 메뉴 (여유로운 너비로 가려짐 없이 깔끔하게 표시)
         self.combo_input_mode = QComboBox()
         self.combo_input_mode.addItems([
-            "🏠 현장 사진 매물 소개 (매매/전세/월세)",
+            "🏠 현장 사진 매물 소개",
             "📰 부동산 뉴스/정보 실시간 브리핑",
-            "📁 문서/자료 분석 (PDF/HWP/보도자료)"
+            "📁 문서/자료 분석 (PDF/HWP)"
         ])
         self.combo_input_mode.setStyleSheet(
             "font-weight: bold; color: #1D4ED8; font-size: 14px; "
             "padding: 5px 10px; background-color: #EFF6FF; border: 1.5px solid #93C5FD;"
         )
-        self.combo_input_mode.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.combo_input_mode.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         header_step1.addWidget(self.combo_input_mode, 1)
         layout_step1.addLayout(header_step1)
 
@@ -458,14 +479,14 @@ class MainWindow(QMainWindow):
         prop_top_grid.setVerticalSpacing(4)
 
         lbl_deal = QLabel("거래 형태:")
-        lbl_deal.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        lbl_deal.setStyleSheet(GRID_LABEL_STYLE)
         prop_top_grid.addWidget(lbl_deal, 0, 0)
         self.combo_deal_type = QComboBox()
         self.combo_deal_type.addItems(["월세 (보증금/월세)", "전세", "매매", "단기임대", "분양/임대", "기타"])
         prop_top_grid.addWidget(self.combo_deal_type, 0, 1)
 
         lbl_ptype = QLabel("매물 종류:")
-        lbl_ptype.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        lbl_ptype.setStyleSheet(GRID_LABEL_STYLE)
         prop_top_grid.addWidget(lbl_ptype, 0, 2)
         self.combo_prop_type = QComboBox()
         self.combo_prop_type.addItems(["아파트", "오피스텔", "빌라/다세대", "원룸/투룸", "상가/사무실", "단독/다가구", "토지/공장/창고", "기타"])
@@ -481,35 +502,35 @@ class MainWindow(QMainWindow):
         prop_grid.setVerticalSpacing(5)
 
         lbl_loc = QLabel("매물 위치/이름:")
-        lbl_loc.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        lbl_loc.setStyleSheet(GRID_LABEL_STYLE)
         prop_grid.addWidget(lbl_loc, 0, 0)
         self.edit_prop_location = QLineEdit()
         self.edit_prop_location.setPlaceholderText("예: 역삼동 신축 오피스텔 (역삼역 도보 3분)")
         prop_grid.addWidget(self.edit_prop_location, 0, 1)
 
         lbl_price = QLabel("가격 조건:")
-        lbl_price.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        lbl_price.setStyleSheet(GRID_LABEL_STYLE)
         prop_grid.addWidget(lbl_price, 1, 0)
         self.edit_prop_price = QLineEdit()
         self.edit_prop_price.setPlaceholderText("예: 보증금 3,000만원 / 월세 150만원 (또는 매매 12억)")
         prop_grid.addWidget(self.edit_prop_price, 1, 1)
 
         lbl_area = QLabel("면적/구조/층수:")
-        lbl_area.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        lbl_area.setStyleSheet(GRID_LABEL_STYLE)
         prop_grid.addWidget(lbl_area, 2, 0)
         self.edit_prop_area = QLineEdit()
         self.edit_prop_area.setPlaceholderText("예: 전용 59㎡(18평) / 방2 화1 / 15층 중 8층 (남향)")
         prop_grid.addWidget(self.edit_prop_area, 2, 1)
 
         lbl_feat = QLabel("특장점/옵션:")
-        lbl_feat.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        lbl_feat.setStyleSheet(GRID_LABEL_STYLE)
         prop_grid.addWidget(lbl_feat, 3, 0)
         self.edit_prop_features = QLineEdit()
         self.edit_prop_features.setPlaceholderText("예: 올수리 첫입주, 시스템에어컨 풀옵션, 주차가능, 채광굿")
         prop_grid.addWidget(self.edit_prop_features, 3, 1)
 
         lbl_memo = QLabel("추가 전달사항:")
-        lbl_memo.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        lbl_memo.setStyleSheet(GRID_LABEL_STYLE)
         prop_grid.addWidget(lbl_memo, 4, 0)
         self.edit_prop_memo = QLineEdit()
         self.edit_prop_memo.setPlaceholderText("예: 즉시입주 협의가능, 신혼부부나 직장인에게 강추")
@@ -565,18 +586,58 @@ class MainWindow(QMainWindow):
 
         # 상단 가이드 & 오늘 작성 기준일 배지
         news_header = QHBoxLayout()
-        lbl_news_guide = QLabel("💡 작성할 주제를 적어주시면, 인터넷 최신 기사를 검색해 분석합니다.")
+        lbl_news_guide = QLabel("💡 작성할 주제를 입력하거나, 아래 연합뉴스 속보를 선택하세요.")
         lbl_news_guide.setStyleSheet(MUTED_TEXT_STYLE)
+        lbl_news_guide.setWordWrap(True)
         news_header.addWidget(lbl_news_guide, 1)
 
         today_str = datetime.now().strftime("%Y년 %m월 %d일")
-        lbl_date_badge = QLabel(f"📅 작성일: {today_str}")
+        lbl_date_badge = QLabel(f"📅 {today_str}")
         lbl_date_badge.setStyleSheet(
             "background-color: #EFF6FF; color: #1D4ED8; font-weight: bold; "
-            "font-size: 13px; padding: 2px 8px; border-radius: 10px; border: 1px solid #BFDBFE;"
+            "font-size: 12px; padding: 3px 8px; border-radius: 10px; border: 1px solid #BFDBFE;"
         )
-        news_header.addWidget(lbl_date_badge)
+        lbl_date_badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        news_header.addWidget(lbl_date_badge, 0, Qt.AlignmentFlag.AlignTop)
         tab_news_layout.addLayout(news_header)
+
+        # 연합뉴스 실시간 부동산 핫이슈 바 (원클릭 글감 선택)
+        yonhap_frame = QFrame()
+        yonhap_frame.setStyleSheet(
+            "background-color: #F0FDF4; border: 1.5px solid #BBF7D0; border-radius: 8px; padding: 6px 8px;"
+        )
+        yonhap_layout = QVBoxLayout(yonhap_frame)
+        yonhap_layout.setContentsMargins(4, 4, 4, 4)
+        yonhap_layout.setSpacing(5)
+
+        yonhap_title_bar = QHBoxLayout()
+        lbl_yonhap_badge = QLabel("🔥 연합뉴스 실시간 속보 (원클릭 글감)")
+        lbl_yonhap_badge.setStyleSheet("font-weight: bold; color: #166534; font-size: 13px;")
+        yonhap_title_bar.addWidget(lbl_yonhap_badge)
+        yonhap_title_bar.addStretch()
+
+        self.btn_clear_yonhap = QPushButton("✕ 선택 취소")
+        self.btn_clear_yonhap.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_clear_yonhap.setStyleSheet("padding: 2px 8px; font-size: 12px; background: #FFFFFF; color: #64748B; border: 1px solid #CBD5E1;")
+        self.btn_clear_yonhap.setToolTip("선택한 연합뉴스 주제를 취소하고 입력창을 비웁니다.")
+        self.btn_clear_yonhap.clicked.connect(self.on_clear_yonhap_news)
+        yonhap_title_bar.addWidget(self.btn_clear_yonhap)
+
+        self.btn_refresh_yonhap = QPushButton("🔄 새로고침")
+        self.btn_refresh_yonhap.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_refresh_yonhap.setStyleSheet("padding: 2px 8px; font-size: 12px; background: #FFFFFF; color: #166534; border: 1px solid #86EFAC;")
+        self.btn_refresh_yonhap.clicked.connect(self.load_yonhap_news)
+        yonhap_title_bar.addWidget(self.btn_refresh_yonhap)
+        yonhap_layout.addLayout(yonhap_title_bar)
+
+        self.combo_yonhap_news = QComboBox()
+        self.combo_yonhap_news.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.combo_yonhap_news.setStyleSheet("font-size: 13px; color: #1E293B; background: #FFFFFF; padding: 4px 8px;")
+        self.combo_yonhap_news.addItem("⏳ 연합뉴스 실시간 부동산 속보를 불러오는 중...")
+        self.combo_yonhap_news.currentIndexChanged.connect(self.on_yonhap_news_selected)
+        yonhap_layout.addWidget(self.combo_yonhap_news)
+
+        tab_news_layout.addWidget(yonhap_frame)
 
         self.edit_news_topic = QTextEdit()
         cur_year = datetime.now().year
@@ -586,18 +647,20 @@ class MainWindow(QMainWindow):
             f"- 최근 서울 및 수도권 아파트 실거래가 및 전세 시장 동향\n"
             f"- 우리 동네(OO동) 재건축 추진 현황 및 상가 입지 분석"
         )
-        self.edit_news_topic.setFixedHeight(80)
+        self.edit_news_topic.setFixedHeight(75)
         tab_news_layout.addWidget(self.edit_news_topic)
 
-        # 자료 최신성 및 검색 제어 바
-        freshness_bar = QHBoxLayout()
-        freshness_bar.setSpacing(8)
+        # 자료 최신성 및 검색 제어 바 (줄바꿈 방지 2단 구성)
+        freshness_layout = QVBoxLayout()
+        freshness_layout.setSpacing(4)
 
+        row1 = QHBoxLayout()
         lbl_freshness = QLabel("🔍 자료 최신성:")
         lbl_freshness.setStyleSheet("font-weight: bold; color: #334155; font-size: 13px;")
-        freshness_bar.addWidget(lbl_freshness)
+        row1.addWidget(lbl_freshness)
 
         self.combo_freshness = QComboBox()
+        self.combo_freshness.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.combo_freshness.addItems([
             "⚡ 최근 3개월 이내 최신 자료 (추천)",
             "🔥 초밀착 최신 (최근 1주일~1개월 보도)",
@@ -607,20 +670,30 @@ class MainWindow(QMainWindow):
         current_freshness = self.config.get("search_freshness", "recent_3m")
         freshness_idx_map = {"recent_3m": 0, "latest": 1, "this_year": 2, "all": 3}
         self.combo_freshness.setCurrentIndex(freshness_idx_map.get(current_freshness, 0))
-        freshness_bar.addWidget(self.combo_freshness)
+        row1.addWidget(self.combo_freshness)
+        freshness_layout.addLayout(row1)
 
+        row2 = QHBoxLayout()
         self.chk_source_date = QCheckBox("발표 시점/일자 본문 표기")
         self.chk_source_date.setChecked(self.config.get("include_source_date", True))
         self.chk_source_date.setToolTip("본문에 '2026년 최근 발표 기준', '최근 보도에 따르면' 등 최신 시점을 명시하여 신뢰도를 높입니다.")
         self.chk_source_date.setStyleSheet(MUTED_TEXT_STYLE)
-        freshness_bar.addWidget(self.chk_source_date)
+        row2.addWidget(self.chk_source_date)
 
-        freshness_bar.addStretch()
-        tab_news_layout.addLayout(freshness_bar)
+        lbl_news_freshness_notice = QLabel("※ 1~2년 전 과거 기사 엄격 배제")
+        lbl_news_freshness_notice.setStyleSheet("color: #059669; font-size: 12px;")
+        lbl_news_freshness_notice.setWordWrap(True)
+        row2.addWidget(lbl_news_freshness_notice)
+        row2.addStretch()
+        freshness_layout.addLayout(row2)
 
-        lbl_news_freshness_notice = QLabel("※ 1~2년 전 오래된 기사는 배제하고 가장 최신의 사실(Fact)만 선별합니다.")
-        lbl_news_freshness_notice.setStyleSheet("color: #059669; font-size: 13px;")
-        tab_news_layout.addWidget(lbl_news_freshness_notice)
+        tab_news_layout.addLayout(freshness_layout)
+
+        lbl_copyright_notice = QLabel("🛡️ [저작권 안심] 단순 기사 복사 없이 공인중개사의 독창적인 분석 및 실무 대응 전략(80% 이상)으로 안전하게 재창작됩니다.")
+        lbl_copyright_notice.setStyleSheet("color: #2563EB; font-size: 12px; font-weight: 600; line-height: 1.4;")
+        lbl_copyright_notice.setWordWrap(True)
+        lbl_copyright_notice.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        tab_news_layout.addWidget(lbl_copyright_notice)
 
         self.stacked_input.addWidget(tab_news)
 
@@ -634,6 +707,7 @@ class MainWindow(QMainWindow):
 
         lbl_file_guide = QLabel("📁 보도자료, 분양 공고문, HWP, PDF, 워드, 텍스트 파일을 분석하여 포스팅합니다.")
         lbl_file_guide.setStyleSheet(MUTED_TEXT_STYLE)
+        lbl_file_guide.setWordWrap(True)
         tab_file_layout.addWidget(lbl_file_guide)
 
         file_pick_layout = QHBoxLayout()
@@ -689,10 +763,14 @@ class MainWindow(QMainWindow):
         layout_step2.addLayout(header_step2)
 
         self.tone_group = QButtonGroup(self)
-        self.radio_neighbor = QRadioButton("☕ 다정한 이웃 말투 (따뜻한 해요체)")
-        self.radio_expert = QRadioButton("🏢 신뢰 전문가 말투 (스펙/입지 브리핑)")
-        self.radio_coach = QRadioButton("📈 부동산 투자 코칭 (실전 인사이트)")
-        self.radio_summary = QRadioButton("⚡ 3분 핵심 요약 (카드뉴스형 요점)")
+        self.radio_neighbor = QRadioButton("☕ 다정한 이웃 (해요체)")
+        self.radio_neighbor.setToolTip("이웃 주민에게 이야기하듯 따뜻하고 편안한 해요체")
+        self.radio_expert = QRadioButton("🏢 신뢰 전문가 (브리핑)")
+        self.radio_expert.setToolTip("정확한 팩트와 수치, 정책 분석 중심의 품격 있는 브리핑체")
+        self.radio_coach = QRadioButton("📈 부동산 코칭 (인사이트)")
+        self.radio_coach.setToolTip("매수자/투자자 관점에서 기회와 주의점, 실전 인사이트를 짚어주는 멘토형")
+        self.radio_summary = QRadioButton("⚡ 3분 요약 (카드뉴스)")
+        self.radio_summary.setToolTip("바쁜 현대인을 위해 한눈에 쏙 들어오는 카드뉴스형 요점 요약")
 
         self.radio_neighbor.setChecked(True)
         self.tone_group.addButton(self.radio_neighbor, 0)
@@ -928,6 +1006,64 @@ class MainWindow(QMainWindow):
             "file_paths": list(self.property_photos),
             "property_info": property_info
         }
+
+    def load_yonhap_news(self):
+        """연합뉴스 경제 RSS에서 부동산 속보 비동기 로딩 시작"""
+        if hasattr(self, "combo_yonhap_news"):
+            self.combo_yonhap_news.blockSignals(True)
+            self.combo_yonhap_news.clear()
+            self.combo_yonhap_news.addItem("⏳ 연합뉴스 실시간 부동산 속보를 불러오는 중...")
+            self.combo_yonhap_news.blockSignals(False)
+        self.yonhap_thread = YonhapNewsLoadThread()
+        self.yonhap_thread.news_loaded_signal.connect(self.on_yonhap_news_loaded)
+        self.yonhap_thread.start()
+
+    def on_yonhap_news_loaded(self, articles: list):
+        """연합뉴스 속보 수집 완료 시 드롭다운 갱신"""
+        self.yonhap_articles = articles
+        if not hasattr(self, "combo_yonhap_news"):
+            return
+        self.combo_yonhap_news.blockSignals(True)
+        self.combo_yonhap_news.clear()
+        if articles:
+            self.combo_yonhap_news.addItem("👇 [클릭] 오늘자 연합뉴스 부동산 핫이슈 글감 선택...")
+            for art in articles:
+                date_str = art.get("pub_date", "")
+                title = art.get("title", "")
+                prefix = f"[{date_str}] " if date_str else ""
+                self.combo_yonhap_news.addItem(f"{prefix}{title}")
+        else:
+            self.combo_yonhap_news.addItem("최신 부동산 속보를 불러오지 못했습니다 (네트워크 확인)")
+        self.combo_yonhap_news.blockSignals(False)
+
+    def on_yonhap_news_selected(self, index: int):
+        """연합뉴스 속보 항목 선택 시 글감 주제창에 자동 입력 (원클릭 세팅)"""
+        if index <= 0 or not self.yonhap_articles:
+            return
+        art_idx = index - 1
+        if 0 <= art_idx < len(self.yonhap_articles):
+            art = self.yonhap_articles[art_idx]
+            title = art.get("title", "")
+            desc = art.get("description", "")
+            date = art.get("pub_date", "")
+            source = art.get("source", "연합뉴스")
+
+            # 기사 단순 복사가 아닌 핵심 팩트 및 주제 브리핑 구조로 주입
+            content = f"[{source} 속보] {title}"
+            if desc:
+                content += f"\n- 주요 보도 팩트: {desc}"
+            if date:
+                content += f"\n- 발표/보도 시점: {date}"
+            self.edit_news_topic.setPlainText(content)
+
+    def on_clear_yonhap_news(self):
+        """선택된 연합뉴스 속보를 취소하고 주제 입력창 초기화"""
+        if hasattr(self, "combo_yonhap_news"):
+            self.combo_yonhap_news.blockSignals(True)
+            self.combo_yonhap_news.setCurrentIndex(0)
+            self.combo_yonhap_news.blockSignals(False)
+        self.edit_news_topic.clear()
+        self.edit_news_topic.setFocus()
 
     def _get_news_input_payload(self):
         """뉴스 기사 모드 입력값 검증 및 페이로드 생성"""

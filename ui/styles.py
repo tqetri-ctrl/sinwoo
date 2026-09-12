@@ -19,7 +19,7 @@ QFrame#CardFrame {
     background-color: #FFFFFF;
     border: 1px solid #E2E8F0;
     border-radius: 10px;
-    padding: 10px 14px;
+    padding: 8px 10px;
 }
 
 QFrame#HeaderCard {
