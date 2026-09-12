@@ -26,6 +26,7 @@ from PyQt6.QtGui import QFont, QIcon, QClipboard
 
 from config import load_config, save_config
 from prompts.blog_templates import TONE_PRESETS
+from services.chart_service import extract_summary_items, render_infographic_card, copy_chart_to_clipboard
 from services.gemini_service import GeminiBlogService
 from services.news_search_service import fetch_yonhap_realestate_news
 from ui.styles import MAIN_STYLESHEET, generate_blog_preview_html
@@ -860,6 +861,13 @@ class MainWindow(QMainWindow):
         self.btn_copy_naver.clicked.connect(self.on_copy_for_naver)
         action_header.addWidget(self.btn_copy_naver)
 
+        # 고화질 차트 이미지 복사 버튼 (파란색)
+        self.btn_copy_chart = QPushButton("📊 차트 이미지 복사")
+        self.btn_copy_chart.setObjectName("ChartCopyButton")
+        self.btn_copy_chart.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_copy_chart.clicked.connect(self.on_copy_chart_image)
+        action_header.addWidget(self.btn_copy_chart)
+
         btn_copy_plain = QPushButton("📄 텍스트 복사")
         btn_copy_plain.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_copy_plain.clicked.connect(self.on_copy_plain_text)
@@ -1263,6 +1271,11 @@ class MainWindow(QMainWindow):
         import markdown
         # 스마트에디터에 깔끔하게 붙여넣어지는 심플 HTML 구성
         body_html = markdown.markdown(body_text, extensions=['extra', 'nl2br', 'tables'])
+
+        # 스마트에디터 ONE 표(Table) 맞춤형 인라인 스타일 보강 (깨짐 방지 및 세련된 테두리/헤더)
+        body_html = body_html.replace('<table>', '<table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; background-color: #FFFFFF; border: 1px solid #CBD5E1;">')
+        body_html = body_html.replace('<th>', '<th style="background-color: #F1F5F9; color: #1E293B; font-weight: bold; padding: 10px 14px; border: 1px solid #CBD5E1; text-align: center;">')
+        body_html = body_html.replace('<td>', '<td style="padding: 10px 14px; border: 1px solid #CBD5E1; color: #334155;">')
         
         full_html = f"""
         <div style="font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; line-height: 1.85; font-size: 15px; color: #222222;">
@@ -1285,8 +1298,47 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "복사 완료! 📋",
-            "네이버 블로그 맞춤 서식으로 복사되었습니다!\n\n네이버 블로그 스마트에디터 화면에서 [Ctrl + V] 로 붙여넣으시면 제목과 본문 서식이 그대로 들어갑니다."
+            "네이버 블로그 맞춤 서식(표/서식 포함)으로 복사되었습니다!\n\n네이버 블로그 스마트에디터 화면에서 [Ctrl + V] 로 붙여넣으시면 제목, 본문, 비교표 서식이 그대로 들어갑니다."
         )
+
+    def on_copy_chart_image(self):
+        """본문 내용과 통계/스펙을 기반으로 고해상도 인포그래픽 카드 이미지를 생성하여 클립보드에 복사"""
+        body_text = self.edit_body.toPlainText().strip()
+        if not body_text:
+            QMessageBox.warning(self, "알림", "복사할 내용이 없습니다. 먼저 블로그 글을 생성해주세요.")
+            return
+
+        current_title = self.combo_titles.currentText().replace("📌 ", "").strip()
+        if not current_title:
+            current_title = "부동산 핵심 체크포인트"
+
+        office_name = self.config.get("office_name", "").strip() or "신우 공인중개사사무소"
+
+        mode = "property" if self.stacked_input.currentIndex() == 0 else "news"
+        prop_info = None
+        if mode == "property":
+            prop_info = {
+                "deal_type": self.combo_deal_type.currentText(),
+                "property_type": self.combo_prop_type.currentText(),
+                "location": self.edit_prop_location.text().strip(),
+                "price": self.edit_prop_price.text().strip(),
+                "area_structure": self.edit_prop_area.text().strip(),
+                "features": self.edit_prop_features.text().strip(),
+            }
+
+        items = extract_summary_items(body_text, mode=mode, property_info=prop_info)
+        category_label = "매물 핵심 Check Point" if mode == "property" else "부동산 정책/이슈 핵심 요약"
+        img = render_infographic_card(current_title, items, office_name=office_name, card_category=category_label)
+
+        if copy_chart_to_clipboard(img):
+            QMessageBox.information(
+                self,
+                "차트 복사 완료! 📊",
+                "고화질 인포그래픽 차트 이미지가 클립보드에 복사되었습니다!\n\n"
+                "네이버 블로그 스마트에디터에서 이미지를 넣고 싶은 위치에 커서를 두고 [Ctrl + V] 로 붙여넣으시면 고해상도 사진으로 바로 첨부됩니다."
+            )
+        else:
+            QMessageBox.warning(self, "오류", "차트 이미지를 생성하지 못했습니다.")
 
     def on_copy_plain_text(self):
         """일반 텍스트 복사"""

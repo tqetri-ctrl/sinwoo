@@ -226,6 +226,25 @@ QPushButton#NaverCopyButton:pressed {
     background-color: #029E47;
 }
 
+/* 차트 이미지 복사 버튼 (로열 블루 포인트) */
+QPushButton#ChartCopyButton {
+    background-color: #2563EB;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 15px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton#ChartCopyButton:hover {
+    background-color: #1D4ED8;
+}
+
+QPushButton#ChartCopyButton:pressed {
+    background-color: #1E40AF;
+}
+
 /* 라디오 버튼 (카드형 톤앤매너 선택용) */
 QRadioButton {
     font-size: 15px;
@@ -300,39 +319,41 @@ QListWidget#PhotoList::item:selected {
 }
 """
 
+_PLACEHOLDER_RULES = [
+    (("추천 스티커:", "추천스티커:", "스티커:"), "sticker-box", "✨", "[네이버 스티커]"),
+    (("추천 자료:", "추천자료:", "추천 표:", "추천표:", "추천 차트:", "추천차트:", "자료:", "추천 그래프:", "추천그래프:"), "data-box", "📊", "[자료/그래프]"),
+    (("네이버 지도", "지도 첨부", "추천 지도", "지도:", "네이버지도"), "map-box", "🗺️", "[네이버 지도 첨부]"),
+    (("추천 배너:", "추천배너:", "명함 배너:", "상담 배너:"), "banner-box", "📞", "[사무소 명함/상담 배너]"),
+]
+
+
+def _render_placeholder_box(match) -> str:
+    """플레이스홀더 텍스트를 시각적 요소 카드 HTML로 변환"""
+    raw = match.group(1).strip()
+    cleaned = re.sub(r'^[✨💡📸📊📞🗺️]\s*', '', raw).strip()
+
+    # 사진 계열 ([📸 사진 1: ...], [📸 현장 사진: ...] 등)
+    if re.match(r'^(사진\s*\d+|현장\s*사진|추천\s*사진|실제\s*사진|공간\s*사진)\s*:', cleaned):
+        parts = cleaned.split(":", 1)
+        prefix = parts[0].strip()
+        val = parts[1].strip() if len(parts) > 1 else ""
+        return f'<div class="placeholder-box photo-box"><span class="icon">📸</span><strong>[{prefix}]</strong> {val}</div>'
+
+    for prefixes, box_cls, icon, label in _PLACEHOLDER_RULES:
+        if cleaned.startswith(prefixes):
+            val = cleaned.split(":", 1)[1].strip() if ":" in cleaned else cleaned
+            return f'<div class="placeholder-box {box_cls}"><span class="icon">{icon}</span><strong>{label}</strong> {val}</div>'
+
+    return match.group(0)
+
+
 def generate_blog_preview_html(title: str, body_markdown: str, tags: list) -> str:
     """
     네이버 블로그 스마트에디터 ONE과 흡사한 단정하고 깔끔한 HTML 미리보기 렌더링 생성
     """
     # 마크다운 ➔ HTML 변환 (tables 확장 포함)
     html_body = markdown.markdown(body_markdown, extensions=['extra', 'nl2br', 'tables'])
-    
-    # 플레이스홀더를 예쁜 블로그 요소 카드/배지로 시각화 (O(N) 선형 치환)
-    def _replace_placeholder(match):
-        raw = match.group(1).strip()
-        # 이모지 제거 및 공백 정돈
-        cleaned = re.sub(r'^[✨💡📸📊📞]\s*', '', raw).strip()
-        
-        # 1. 사진 계열 ([📸 사진 1: ...], [📸 현장 사진: ...], [📸 추천 사진: ...] 등)
-        if re.match(r'^(사진\s*\d+|현장\s*사진|추천\s*사진|실제\s*사진|공간\s*사진)\s*:', cleaned):
-            parts = cleaned.split(":", 1)
-            prefix = parts[0].strip()
-            val = parts[1].strip() if len(parts) > 1 else ""
-            return f'<div class="placeholder-box photo-box"><span class="icon">📸</span><strong>[{prefix}]</strong> {val}</div>'
-            
-        if cleaned.startswith(("추천 스티커:", "추천스티커:", "스티커:")):
-            val = cleaned.split(":", 1)[1].strip()
-            return f'<div class="placeholder-box sticker-box"><span class="icon">✨</span><strong>[네이버 스티커]</strong> {val}</div>'
-        if cleaned.startswith(("추천 자료:", "추천자료:", "추천 표:", "추천표:", "추천 차트:", "추천차트:", "자료:")):
-            val = cleaned.split(":", 1)[1].strip()
-            return f'<div class="placeholder-box data-box"><span class="icon">📊</span><strong>[자료/그래프]</strong> {val}</div>'
-        if cleaned.startswith(("추천 배너:", "추천배너:", "명함 배너:", "상담 배너:")):
-            val = cleaned.split(":", 1)[1].strip()
-            return f'<div class="placeholder-box banner-box"><span class="icon">📞</span><strong>[사무소 명함/상담 배너]</strong> {val}</div>'
-        
-        return match.group(0)
-
-    html_body = re.sub(r'\[([^\]\r\n]+)\]', _replace_placeholder, html_body)
+    html_body = re.sub(r'\[([^\]\r\n]+)\]', _render_placeholder_box, html_body)
 
     tag_html = " ".join([f'<span class="tag-badge">{t}</span>' for t in tags])
 
@@ -458,6 +479,11 @@ def generate_blog_preview_html(title: str, body_markdown: str, tags: list) -> st
             background-color: #F3E8FF;
             border: 1px dashed #A855F7;
             color: #6B21A8;
+        }}
+        .map-box {{
+            background-color: #E0F2FE;
+            border: 1.5px dashed #0284C7;
+            color: #0369A1;
         }}
         .banner-box {{
             background-color: #ECFDF5;
