@@ -129,7 +129,7 @@ def resolve_coordinates(zone_or_addr: str) -> tuple | None:
         search_queries.append(simplified)
 
     # 구역 번호나 지구/단지 접미사를 제거한 행정동/지역명 검색 추가 (예: '한남3구역' -> '한남동', '도마변동5구역' -> '도마동')
-    sub_q = re.sub(r'\d+구역|\d+지구|\d+차|\d+단지', '', zone_or_addr).strip()
+    sub_q = re.sub(r'\d{1,4}(?:구역|지구|차|단지)', '', zone_or_addr).strip()
     if sub_q and sub_q not in search_queries:
         search_queries.append(sub_q)
         if not sub_q.endswith(('동', '구', '시', '읍', '면', '리', '로', '길')):
@@ -338,48 +338,59 @@ def open_eum_viewer(zone_or_addr: str):
     webbrowser.open(eum_map_url)
 
 
-def extract_zone_keyword(text: str) -> str:
-    """텍스트(제목, 본문 등)에서 정비구역명 또는 행정동 키워드 동적 추출 (전국 단위)"""
-    if not text:
-        return ""
-
-    # 1. 괄호나 대괄호 안의 구역/단지명 우선 탐색
+def _find_bracketed_zone(text: str) -> str:
+    """대괄호 또는 소괄호 내부 정비구역 키워드 추출"""
     bracketed = re.findall(r'\[(.*?)\]|\((.*?)\)', text)
     for b1, b2 in bracketed:
         cand = (b1 or b2).strip()
         if any(cand.endswith(suf) for suf in ("구역", "단지", "지구", "마을", "뉴타운")):
             return cand
-
-    # 2. 'XX동 Y구역' 형태 탐색 -> 'XX Y구역' 또는 'XXY구역' (예: 탄방동 1구역 -> 탄방1구역)
-    m_dong_zone = re.search(r'([가-힣]{2,})동\s*([0-9]+구역)', text)
-    if m_dong_zone:
-        region = m_dong_zone.group(1)
-        zone_num = m_dong_zone.group(2)
-        if len(region) <= 2:
-            return f"{region}{zone_num}"
-        return f"{region}동{zone_num}"
-
-    # 3. 'XX구역', 'XX단지', 'XX지구', 'XX뉴타운' 등 주요 정비사업 키워드 탐색
-    m_zone = re.search(r'([가-힣0-9·]+(?:구역|단지|지구|뉴타운))', text)
-    if m_zone:
-        cand = m_zone.group(1).strip()
-        # 만약 '1구역'처럼 숫자만 있는 경우 앞 단어 결합
-        if re.match(r'^[0-9·]+구역$', cand):
-            idx = text.find(cand)
-            prefix = text[:idx].strip().split()
-            if prefix:
-                prev_word = re.sub(r"[^가-힣0-9]", "", prefix[-1])
-                return f"{prev_word}{cand}"
-        return cand
-
-    # 4. 행정동 탐색 (예: '한남동', '도마동', '성수동')
-    dong_match = re.search(r'([가-힣]{2,}동)(?:\s|$|[^\w])', text)
-    if dong_match:
-        cand = dong_match.group(1).strip()
-        # 일반 명사 접미사 등 제외
-        if cand not in ("부동산동", "운동", "활동", "공동", "작동", "변동", "자동", "수동", "연동"):
-            return cand
-
     return ""
+
+
+def _find_dong_zone(text: str) -> str:
+    """'XX동 Y구역' 형태를 'XXY구역' 또는 'XX동Y구역'으로 정규화 추출"""
+    m = re.search(r'([가-힣]{2,4})동\s*(\d+구역)', text)
+    if not m:
+        return ""
+    region, zone_num = m.group(1), m.group(2)
+    return f"{region}{zone_num}" if len(region) <= 2 else f"{region}동{zone_num}"
+
+
+def _find_general_zone(text: str) -> str:
+    """'XX구역', 'XX단지' 등 주요 정비사업 키워드 추출"""
+    m = re.search(r'([가-힣\d·]{2,12}(?:구역|단지|지구|뉴타운))', text)
+    if not m:
+        return ""
+    cand = m.group(1).strip()
+    if re.match(r'^\d+구역$', cand):
+        idx = text.find(cand)
+        prefix = text[:idx].strip().split()
+        if prefix:
+            prev_word = re.sub(r"[^가-힣\d]", "", prefix[-1])
+            return f"{prev_word}{cand}"
+    return cand
+
+
+def _find_dong_name(text: str) -> str:
+    """행정동 단위 키워드 추출"""
+    m = re.search(r'([가-힣]{2,4}동)(?:\s|$)', text)
+    if not m:
+        return ""
+    cand = m.group(1).strip()
+    excluded = {"부동산동", "운동", "활동", "공동", "작동", "변동", "자동", "수동", "연동"}
+    return cand if cand not in excluded else ""
+
+
+def extract_zone_keyword(text: str) -> str:
+    """텍스트(제목, 본문 등)에서 정비구역명 또는 행정동 키워드 동적 추출 (전국 단위)"""
+    if not text:
+        return ""
+    return (
+        _find_bracketed_zone(text)
+        or _find_dong_zone(text)
+        or _find_general_zone(text)
+        or _find_dong_name(text)
+    )
 
 
