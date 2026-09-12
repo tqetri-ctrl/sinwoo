@@ -369,10 +369,10 @@ def _render_chart_embed(val: str = "") -> str:
     """인포그래픽 요약 카드 임베드 HTML 렌더링"""
     desc = f" - {val}" if val else ""
     return (
-        '<div class="visual-card-box chart-visual" style="margin: 22px 0; text-align: center; background: #F8FAFC; border: 1.5px solid #BFDBFE; border-radius: 12px; padding: 14px 12px;">'
+        '<div class="visual-card-box chart-visual" style="margin: 16px 0; text-align: center; background: #F8FAFC; border: 1.5px solid #BFDBFE; border-radius: 12px; padding: 12px 10px;">'
         f'<div style="font-size: 13px; font-weight: 700; color: #1D4ED8; margin-bottom: 8px; text-align: left;">'
         f'📊 <strong>[핵심 요약 인포그래픽 카드]</strong>{desc}</div>'
-        '<img src="chart_preview.png" style="max-width: 100%; border-radius: 8px; border: 1px solid #E2E8F0;">'
+        '<img src="chart_preview.png" width="620" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #E2E8F0; display: block; margin: 0 auto;">'
         '<div style="font-size: 12px; color: #64748B; margin-top: 6px;">'
         '💡 상단 <strong>[📊 차트 복사]</strong> 버튼을 누르면 이 고화질 카드가 클립보드에 복사되어 블로그에 바로 첨부됩니다.</div>'
         '</div>'
@@ -383,10 +383,10 @@ def _render_map_embed(val: str = "") -> str:
     """정비구역/매물 위치도 임베드 HTML 렌더링"""
     desc = f" - {val}" if val else ""
     return (
-        '<div class="visual-card-box map-visual" style="margin: 22px 0; text-align: center; background: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 12px; padding: 14px 12px;">'
+        '<div class="visual-card-box map-visual" style="margin: 16px 0; text-align: center; background: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 12px; padding: 12px 10px;">'
         f'<div style="font-size: 13px; font-weight: 700; color: #0284C7; margin-bottom: 8px; text-align: left;">'
         f'🗺️ <strong>[정비구역 / 매물 위치도]</strong>{desc}</div>'
-        '<img src="zone_map_preview.png" style="max-width: 100%; border-radius: 8px; border: 1px solid #E2E8F0;">'
+        '<img src="zone_map_preview.png" width="620" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #E2E8F0; display: block; margin: 0 auto;">'
         '<div style="font-size: 12px; color: #64748B; margin-top: 6px;">'
         '💡 상단 <strong>[🗺️ 구역 지도 복사]</strong> 버튼을 누르면 이 고화질 위치도가 클립보드에 복사되어 블로그에 바로 첨부됩니다.</div>'
         '</div>'
@@ -415,7 +415,7 @@ def _render_rule_box(box_cls: str, icon: str, label: str, val: str, has_chart: b
 def _render_placeholder_box(match, has_chart: bool = False, has_zone_map: bool = False) -> str:
     """플레이스홀더 텍스트를 시각적 요소 카드 또는 실제 이미지 임베드로 변환"""
     raw = match.group(1).strip()
-    cleaned = re.sub(r'^[✨💡📸📊📞🗺️]\s*', '', raw).strip()
+    cleaned = re.sub(r'^[^0-9a-zA-Z가-힣]+', '', raw).strip()
 
     photo_box = _render_photo_placeholder(cleaned)
     if photo_box:
@@ -446,6 +446,13 @@ def generate_blog_preview_html(
         r'\[([^\]\r\n]+)\]',
         lambda m: _render_placeholder_box(m, has_chart, has_zone_map),
         html_body
+    )
+    # p 태그로 감싸진 div 블록 정제 (불필요한 상하 여백 제거)
+    html_body = re.sub(
+        r'<p>\s*(<div class="visual-card-box[^>]*>.*?</div>)\s*</p>',
+        r'\1',
+        html_body,
+        flags=re.DOTALL
     )
 
     if has_chart and "chart_preview.png" not in html_body:

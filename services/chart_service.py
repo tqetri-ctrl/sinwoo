@@ -144,8 +144,15 @@ def render_infographic_card(
     """
     네이버 블로그 본문 첨부용 고해상도 카드 인포그래픽 이미지(960x540, 16:9) 생성
     """
+    content_items = items if items else [("핵심 내용", "상세 분석 결과")]
+    row_count = len(content_items)
+    row_h = 60
+    row_gap = 10
+    start_y = 135
+
     width = 960
-    height = 540
+    # 내용물 항목 개수에 꼭 맞게 전체 캔버스 높이 동적 최적화 (하단 여백 낭비 원천 차단)
+    height = max(300, start_y + row_count * (row_h + row_gap) + 45)
 
     img = QImage(width, height, QImage.Format.Format_ARGB32)
     img.fill(QColor("#00000000"))
@@ -184,21 +191,16 @@ def render_infographic_card(
     p.drawText(QRectF(48, 64, width - 96, 46), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, clean_title)
 
     # 3. 본문 항목 리스트 박스들
-    content_items = items if items else [("핵심 내용", "상세 분석 결과")]
-    start_y = 135
-    row_count = len(content_items)
-    row_h = min(68, int(330 / max(row_count, 1)))
-
     for i, (key, val) in enumerate(content_items):
-        y_pos = start_y + i * row_h
-        item_rect = QRectF(28, y_pos, width - 56, row_h - 8)
+        y_pos = start_y + i * (row_h + row_gap)
+        item_rect = QRectF(28, y_pos, width - 56, row_h)
 
         p.setBrush(QColor("#FFFFFF"))
         p.setPen(QPen(QColor("#E2E8F0"), 1))
         p.drawRoundedRect(item_rect, 8, 8)
 
         # 좌측 넘버링 뱃지
-        badge_rect = QRectF(42, y_pos + (row_h - 8 - 28) / 2, 28, 28)
+        badge_rect = QRectF(42, y_pos + (row_h - 28) / 2, 28, 28)
         p.setBrush(QColor("#2563EB"))
         p.setPen(Qt.PenStyle.NoPen)
         p.drawRoundedRect(badge_rect, 6, 6)
@@ -210,21 +212,21 @@ def render_infographic_card(
         # 항목 레이블 (Key)
         p.setPen(QColor("#1E293B"))
         p.setFont(QFont(FONT_FAMILY, 13, QFont.Weight.Bold))
-        key_rect = QRectF(80, y_pos + 4, 180, row_h - 16)
+        key_rect = QRectF(80, y_pos + 4, 180, row_h - 8)
         p.drawText(key_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, key)
 
         # 구분 바
         p.setPen(QPen(QColor("#E2E8F0"), 1))
-        p.drawLine(int(265), int(y_pos + 10), int(265), int(y_pos + row_h - 18))
+        p.drawLine(int(265), int(y_pos + 8), int(265), int(y_pos + row_h - 8))
 
         # 항목 값 (Value)
         p.setPen(QColor("#334155"))
         p.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.DemiBold))
-        val_rect = QRectF(280, y_pos + 4, width - 330, row_h - 16)
+        val_rect = QRectF(280, y_pos + 4, width - 330, row_h - 8)
         p.drawText(val_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, val)
 
     # 4. 하단 브랜딩 푸터
-    footer_rect = QRectF(32, height - 42, width - 64, 26)
+    footer_rect = QRectF(32, height - 38, width - 64, 24)
     p.setPen(QColor("#64748B"))
     p.setFont(QFont(FONT_FAMILY, 11, QFont.Weight.Normal))
     footer_text = f"🏢 {office_name} | 네이버 블로그 공식 포스팅 인포그래픽 자료"
