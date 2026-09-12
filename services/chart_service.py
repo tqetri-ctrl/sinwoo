@@ -178,6 +178,33 @@ def _draw_fitted_metric_value(p: QPainter, rect: QRectF, val: str, color: QColor
         p.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap, clean_val)
 
 
+def _build_zone_dashboard_metrics(zone_data: dict, stage_text: str) -> list:
+    """대시보드 4대 지표 카드 데이터 생성 (커스텀 지표 또는 표준 지표)"""
+    custom_metrics = zone_data.get("metrics")
+    if custom_metrics and len(custom_metrics) >= 4:
+        icons = ["🏢", "🏗️", "📌", "📍"]
+        colors = [
+            ("#1D4ED8", "#EFF6FF", "#BFDBFE"),
+            ("#047857", "#ECFDF5", "#A7F3D0"),
+            ("#7C3AED", "#F5F3FF", "#DDD6FE"),
+            ("#B45309", "#FFFBEB", "#FDE68A"),
+        ]
+        known_icons = ("🏢", "🏗️", "📌", "📍", "🏷️", "💰", "📐", "🌟", "📊", "🚀", "⚡", "👉")
+        metrics = []
+        for i in range(4):
+            lbl, val = custom_metrics[i]
+            prefix = "" if any(lbl.startswith(ic) for ic in known_icons) else f"{icons[i]} "
+            metrics.append((f"{prefix}{lbl}".strip(), val, colors[i][0], colors[i][1], colors[i][2]))
+        return metrics
+
+    return [
+        ("🏢 사업 규모", zone_data.get("units", "상세 세대수 본문 참조"), "#1D4ED8", "#EFF6FF", "#BFDBFE"),
+        ("🏗️ 시공 브랜드", zone_data.get("builder", "시공사 정보 본문 참조"), "#047857", "#ECFDF5", "#A7F3D0"),
+        ("📌 추진 현황", stage_text or "사업 추진 및 시행 단계", "#7C3AED", "#F5F3FF", "#DDD6FE"),
+        ("📍 건축 규모", zone_data.get("scale", "상세 계획 본문 참조"), "#B45309", "#FFFBEB", "#FDE68A"),
+    ]
+
+
 def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_name: str, zone_data: dict, office_name: str):
     """정비사업 구역 데이터 자동 수집 대시보드 (진행률 로드맵 + 4대 지표)"""
     card_rect = QRectF(2, 2, width - 4, height - 4)
@@ -205,7 +232,7 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
     step_y = 88
     p.setPen(QColor("#334155"))
     p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-    step_label = "🚀 사업 추진 단계 로드맵" if "정비" in cat_title or "재개발" in cat_title or "재건축" in cat_title else "🎯 정책 시행 및 추진 로드맵"
+    step_label = "🚀 사업 추진 단계 로드맵" if any(k in cat_title for k in ("정비", "재개발", "재건축")) else "🎯 정책 시행 및 추진 로드맵"
     p.drawText(QRectF(14, step_y, width - 28, 18), Qt.AlignmentFlag.AlignLeft, step_label)
 
     bar_y = step_y + 22
@@ -232,28 +259,7 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
     box_w = (width - 36) / 2
     box_h = 94
 
-    custom_metrics = zone_data.get("metrics")
-    if custom_metrics and len(custom_metrics) >= 4:
-        icons = ["🏢", "🏗️", "📌", "📍"]
-        colors = [
-            ("#1D4ED8", "#EFF6FF", "#BFDBFE"),
-            ("#047857", "#ECFDF5", "#A7F3D0"),
-            ("#7C3AED", "#F5F3FF", "#DDD6FE"),
-            ("#B45309", "#FFFBEB", "#FDE68A"),
-        ]
-        metrics = []
-        for i in range(4):
-            lbl, val = custom_metrics[i]
-            prefix = icons[i] if not any(lbl.startswith(ic) for ic in ["🏢", "🏗️", "📌", "📍", "🏷️", "💰", "📐", "🌟", "📊", "🚀", "⚡", "👉"]) else ""
-            display_lbl = f"{prefix} {lbl}".strip()
-            metrics.append((display_lbl, val, colors[i][0], colors[i][1], colors[i][2]))
-    else:
-        metrics = [
-            ("🏢 총 세대수", zone_data.get("units", "약 2,870세대"), "#1D4ED8", "#EFF6FF", "#BFDBFE"),
-            ("🏗️ 시공 브랜드", zone_data.get("builder", "현대건설 & GS건설"), "#047857", "#ECFDF5", "#A7F3D0"),
-            ("📌 추진 현황", stage_text, "#7C3AED", "#F5F3FF", "#DDD6FE"),
-            ("📍 건축 규모", zone_data.get("scale", "지하 2층 ~ 지상 38층"), "#B45309", "#FFFBEB", "#FDE68A"),
-        ]
+    metrics = _build_zone_dashboard_metrics(zone_data, stage_text)
 
     for idx, (label, val, text_color, bg_color, border_color) in enumerate(metrics):
         r = idx // 2
@@ -275,7 +281,8 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
     footer_rect = QRectF(14, height - 30, width - 28, 20)
     p.setPen(QColor("#64748B"))
     p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
-    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"🏢 {office_name} | 네이버 블로그 공식 포스팅 요약 차트")
+    office_str = f"🏢 {office_name} | " if office_name else ""
+    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"{office_str}네이버 블로그 공식 포스팅 요약 차트")
 
 
 def _draw_property_dashboard(p: QPainter, width: int, height: int, title: str, prop_info: dict, office_name: str):
@@ -292,7 +299,8 @@ def _draw_property_dashboard(p: QPainter, width: int, height: int, title: str, p
 
     p.setPen(QColor("#99F6E4"))
     p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"🏠 공인중개사 추천 매물 브리핑 | {office_name}")
+    header_title = f"🏠 공인중개사 추천 매물 브리핑 | {office_name}" if office_name else "🏠 공인중개사 추천 매물 브리핑"
+    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, header_title)
 
     _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
 
@@ -306,8 +314,9 @@ def _draw_property_dashboard(p: QPainter, width: int, height: int, title: str, p
         ("🏷️ 매물 구분", f"{prop_type} ({deal_type})", "#0D9488", "#F0FDFA", "#99F6E4"),
         ("💰 가격 조건", prop_info.get("price", "협의 가능"), "#DC2626", "#FEF2F2", "#FECACA"),
         ("📐 면적 및 구조", prop_info.get("area_structure", "상세 문의"), "#2563EB", "#EFF6FF", "#BFDBFE"),
-        ("📍 소재지 위치", prop_info.get("location", "대전 서구"), "#7C3AED", "#F5F3FF", "#DDD6FE"),
+        ("📍 소재지 위치", prop_info.get("location", "상세 위치 문의"), "#7C3AED", "#F5F3FF", "#DDD6FE"),
     ]
+
 
     for idx, (label, val, text_color, bg_color, border_color) in enumerate(metrics):
         r = idx // 2
@@ -416,13 +425,14 @@ def _draw_generic_dashboard(p: QPainter, width: int, height: int, title: str, it
     footer_rect = QRectF(14, height - 30, width - 28, 20)
     p.setPen(QColor("#64748B"))
     p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
-    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"🏢 {office_name} | 네이버 블로그 공식 포스팅 요약 차트")
+    office_str = f"🏢 {office_name} | " if office_name else ""
+    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"{office_str}네이버 블로그 공식 포스팅 요약 차트")
 
 
 def render_infographic_card(
     title: str,
     items: list = None,
-    office_name: str = "신우 공인중개사사무소",
+    office_name: str = "",
     card_category: str = "부동산 핵심 체크포인트",
     zone_name: str = "",
     zone_data: dict = None,

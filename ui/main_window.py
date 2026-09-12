@@ -32,7 +32,7 @@ from services.gemini_service import GeminiBlogService
 from services.news_search_service import fetch_yonhap_realestate_news
 from services.zone_map_service import (
     generate_zone_map_image, copy_zone_map_to_clipboard, open_eum_viewer,
-    KNOWN_ZONES, get_zone_data, extract_zone_keyword
+    get_zone_data, extract_zone_keyword
 )
 from ui.settings_dialog import SettingsDialog
 from ui.styles import MAIN_STYLESHEET, generate_blog_preview_html
@@ -1054,7 +1054,7 @@ class MainWindow(QMainWindow):
         if not body_text:
             return None
         current_title = self.combo_titles.currentText().replace("📌 ", "").strip() or "부동산 핵심 체크포인트"
-        office_name = self.config.get("office_name", "").strip() or "신우 공인중개사사무소"
+        office_name = self.config.get("office_name", "").strip()
 
         # 1. AI가 포스팅 생성 시 실시간 자동 수집/추출한 핵심 대시보드 데이터 최우선 활용
         if self._current_dashboard_data:
@@ -1100,7 +1100,7 @@ class MainWindow(QMainWindow):
 
     def _create_current_zone_map(self) -> QImage:
         """현재 구역/소재지 기반 정비구역 위치도 이미지 생성"""
-        office_name = self.config.get("office_name", "").strip() or "신우 공인중개사사무소"
+        office_name = self.config.get("office_name", "").strip()
 
         # 1. AI 분석 결과에서 지도가 불필요하다고 판단한 경우(거시 정책, 금리, 규제 등) 지도 생성 생략
         if self._current_map_data:

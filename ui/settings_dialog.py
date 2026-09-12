@@ -96,25 +96,25 @@ class SettingsDialog(QDialog):
 
         form_grid.addWidget(QLabel("사무소 상호:"), 0, 0)
         self.edit_office_name = QLineEdit()
-        self.edit_office_name.setPlaceholderText("예: 신우 공인중개사사무소")
+        self.edit_office_name.setPlaceholderText("예: 공인중개사사무소 상호명")
         self.edit_office_name.setText(self.config.get("office_name", ""))
         form_grid.addWidget(self.edit_office_name, 0, 1)
 
         form_grid.addWidget(QLabel("대표자 성명:"), 1, 0)
         self.edit_agent_name = QLineEdit()
-        self.edit_agent_name.setPlaceholderText("예: 대표 공인중개사 박혜숙")
+        self.edit_agent_name.setPlaceholderText("예: 대표 공인중개사 성명")
         self.edit_agent_name.setText(self.config.get("agent_name", ""))
         form_grid.addWidget(self.edit_agent_name, 1, 1)
 
         form_grid.addWidget(QLabel("연락처/전화:"), 2, 0)
         self.edit_office_phone = QLineEdit()
-        self.edit_office_phone.setPlaceholderText("예: 042-535-7008 / 010-XXXX-XXXX")
+        self.edit_office_phone.setPlaceholderText("예: 02-1234-5678 / 010-1234-5678")
         self.edit_office_phone.setText(self.config.get("office_phone", ""))
         form_grid.addWidget(self.edit_office_phone, 2, 1)
 
         form_grid.addWidget(QLabel("사무소 위치:"), 3, 0)
         self.edit_office_location = QLineEdit()
-        self.edit_office_location.setPlaceholderText("예: 대전광역시 서구 도마동 80-37")
+        self.edit_office_location.setPlaceholderText("예: 서울특별시 강남구 테헤란로 123 (도로명/지번 주소)")
         self.edit_office_location.setText(self.config.get("office_location", ""))
         form_grid.addWidget(self.edit_office_location, 3, 1)
 

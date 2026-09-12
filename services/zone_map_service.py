@@ -26,133 +26,9 @@ from PyQt6.QtWidgets import QApplication
 
 FONT_FAMILY = "Malgun Gothic"
 
-ADDR_DOMA_DONG = "대전 서구 도마동 일원"
-ADDR_BYEONDONG = "대전 서구 변동 일원"
-ADDR_TANBANG = "대전 서구 탄방동 일원"
-STAGE_FRAMEWORK = "착공 및 골조 공사"
+# 하드코딩 완전 제거: 실시간 오픈 지오코더(Nominatim) 및 AI 분석 메타데이터를 100% 동적 활용
+KNOWN_ZONES = {}
 
-# 대전 및 주요 재개발/정비사업 구역 좌표 및 공식 메트릭 데이터베이스 (정밀 다각형 Polygon 포함)
-KNOWN_ZONES = {
-    "도마변동5구역": {
-        "lat": 36.3168, "lon": 127.3785, "title": "도마·변동 5구역 재정비촉진지구", "addr": ADDR_BYEONDONG,
-        "bbox": (36.3138, 127.3745, 36.3195, 127.3825),
-        "polygon": [
-            (36.3195, 127.3752), (36.3198, 127.3788), (36.3188, 127.3820),
-            (36.3162, 127.3828), (36.3138, 127.3815), (36.3135, 127.3772),
-            (36.3150, 127.3745), (36.3175, 127.3740)
-        ],
-        "units": "약 2,870세대 (대단지)", "builder": "현대건설 & GS건설 (힐스테이트·자이)",
-        "stage": "사업시행인가 완료 (관리처분 준비)", "progress": 70, "scale": "지하 2층 ~ 지상 38층, 20여 개 동"
-    },
-    "도마변동1구역": {
-        "lat": 36.3262, "lon": 127.3770, "title": "도마·변동 1구역 재정비촉진지구", "addr": "대전 서구 가장동 일원",
-        "bbox": (36.3225, 127.3725, 36.3298, 127.3815),
-        "polygon": [
-            (36.3298, 127.3740), (36.3290, 127.3815), (36.3245, 127.3810),
-            (36.3225, 127.3775), (36.3240, 127.3725), (36.3275, 127.3725)
-        ],
-        "units": "1,779세대 (일반분양 완료)", "builder": "현대건설 & 현대엔지니어링 (힐스테이트가장)",
-        "stage": "착공 및 골조 공사 진행", "progress": 85, "scale": "지하 2층 ~ 지상 38층, 15개 동"
-    },
-    "도마변동3구역": {
-        "lat": 36.3210, "lon": 127.3795, "title": "도마·변동 3구역 재정비촉진지구", "addr": ADDR_BYEONDONG,
-        "bbox": (36.3175, 127.3750, 36.3245, 127.3840),
-        "polygon": [
-            (36.3245, 127.3770), (36.3240, 127.3835), (36.3195, 127.3840),
-            (36.3175, 127.3795), (36.3185, 127.3750), (36.3220, 127.3755)
-        ],
-        "units": "3,098세대 (매머드급 대단지)", "builder": "GS건설 & 포스코이앤씨",
-        "stage": "사업시행인가 완료", "progress": 65, "scale": "지하 2층 ~ 지상 38층, 25개 동"
-    },
-    "도마변동4구역": {
-        "lat": 36.3225, "lon": 127.3745, "title": "도마·변동 4구역 재정비촉진지구", "addr": ADDR_BYEONDONG,
-        "bbox": (36.3190, 127.3700, 36.3260, 127.3790),
-        "polygon": [
-            (36.3260, 127.3720), (36.3255, 127.3785), (36.3205, 127.3790),
-            (36.3190, 127.3740), (36.3210, 127.3700), (36.3240, 127.3705)
-        ],
-        "units": "3,296세대 (최대 규모 단지)", "builder": "롯데건설 & 현대엔지니어링",
-        "stage": "조합설립인가 완료", "progress": 50, "scale": "지하 2층 ~ 지상 38층, 28개 동"
-    },
-    "도마변동6구역": {
-        "lat": 36.3155, "lon": 127.3820, "title": "도마·변동 6구역 재정비촉진지구", "addr": ADDR_DOMA_DONG,
-        "bbox": (36.3125, 127.3790, 36.3185, 127.3850),
-        "polygon": [
-            (36.3185, 127.3800), (36.3180, 127.3850), (36.3140, 127.3845),
-            (36.3125, 127.3815), (36.3145, 127.3790)
-        ],
-        "units": "523세대", "builder": "계룡건설 (리슈빌)",
-        "stage": "착공 및 공사 진행", "progress": 85, "scale": "지하 2층 ~ 지상 31층, 4개 동"
-    },
-    "도마변동8구역": {
-        "lat": 36.3140, "lon": 127.3845, "title": "도마·변동 8구역 (도마e편한세상포레나)", "addr": ADDR_DOMA_DONG,
-        "bbox": (36.3105, 127.3810, 36.3175, 127.3880),
-        "units": "1,881세대 (입주 완료 랜드마크)", "builder": "한화건설 & DL이앤씨",
-        "stage": "준공 및 입주 완료", "progress": 100, "scale": "지하 2층 ~ 지상 34층, 20개 동"
-    },
-    "도마변동9구역": {
-        "lat": 36.3180, "lon": 127.3870, "title": "도마·변동 9구역 (한화포레나더샵)", "addr": ADDR_DOMA_DONG,
-        "bbox": (36.3150, 127.3830, 36.3210, 127.3910),
-        "units": "818세대", "builder": "한화건설 & 포스코이앤씨",
-        "stage": STAGE_FRAMEWORK, "progress": 80, "scale": "지하 3층 ~ 지상 34층, 7개 동"
-    },
-    "도마변동11구역": {
-        "lat": 36.3120, "lon": 127.3800, "title": "도마·변동 11구역 (호반써밋그랜드센트럴)", "addr": ADDR_DOMA_DONG,
-        "bbox": (36.3085, 127.3765, 36.3155, 127.3835),
-        "units": "1,558세대", "builder": "호반건설 (호반써밋)",
-        "stage": "준공 및 입주 단계", "progress": 95, "scale": "지하 4층 ~ 지상 35층, 19개 동"
-    },
-    "도마변동12구역": {
-        "lat": 36.3170, "lon": 127.3720, "title": "도마·변동 12구역 재정비촉진지구", "addr": ADDR_DOMA_DONG,
-        "bbox": (36.3135, 127.3685, 36.3205, 127.3755),
-        "units": "1,688세대", "builder": "GS건설 & DL이앤씨",
-        "stage": "사업시행인가 준비 중", "progress": 55, "scale": "지하 2층 ~ 지상 35층, 13개 동"
-    },
-    "도마변동13구역": {
-        "lat": 36.3135, "lon": 127.3745, "title": "도마·변동 13구역 재정비촉진지구", "addr": ADDR_DOMA_DONG,
-        "bbox": (36.3100, 127.3710, 36.3170, 127.3780),
-        "units": "2,715세대", "builder": "대우건설 & 포스코이앤씨",
-        "stage": "조합설립인가 완료", "progress": 50, "scale": "지하 2층 ~ 지상 32층, 20여 개 동"
-    },
-    "탄방1구역": {
-        "lat": 36.3450, "lon": 127.3910, "title": "탄방동 1구역 (둔산자이아이파크)", "addr": ADDR_TANBANG,
-        "bbox": (36.3415, 127.3860, 36.3485, 127.3960),
-        "polygon": [
-            (36.3485, 127.3880), (36.3475, 127.3955), (36.3430, 127.3960),
-            (36.3415, 127.3910), (36.3425, 127.3860), (36.3460, 127.3865)
-        ],
-        "units": "1,974세대 (둔산 대장주)", "builder": "GS건설 & HDC현대산업개발",
-        "stage": STAGE_FRAMEWORK, "progress": 85, "scale": "지하 2층 ~ 지상 42층, 12개 동"
-    },
-    "숭어리샘": {
-        "lat": 36.3430, "lon": 127.3870, "title": "탄방동 숭어리샘 (둔산자이아이파크)", "addr": ADDR_TANBANG,
-        "bbox": (36.3400, 127.3820, 36.3460, 127.3920),
-        "units": "1,974세대 (둔산 대장주)", "builder": "GS건설 & HDC현대산업개발",
-        "stage": STAGE_FRAMEWORK, "progress": 85, "scale": "지하 2층 ~ 지상 42층, 12개 동"
-    },
-    "용문123구역": {
-        "lat": 36.3380, "lon": 127.3980, "title": "용문 1·2·3구역 (둔산더샵엘리프)", "addr": "대전 서구 용문동 일원",
-        "bbox": (36.3340, 127.3930, 36.3420, 127.4030),
-        "polygon": [
-            (36.3420, 127.3950), (36.3415, 127.4025), (36.3365, 127.4030),
-            (36.3340, 127.3980), (36.3355, 127.3930), (36.3390, 127.3935)
-        ],
-        "units": "2,763세대 (대단지)", "builder": "포스코이앤씨 & 계룡건설",
-        "stage": "마감 공사 및 입주 준비", "progress": 90, "scale": "지하 3층 ~ 지상 33층, 23개 동"
-    },
-    "선화구역": {
-        "lat": 36.3310, "lon": 127.4200, "title": "선화 재정비촉진구역", "addr": "대전 중구 선화동 일원",
-        "bbox": (36.3275, 127.4160, 36.3345, 127.4240),
-        "units": "997세대", "builder": "효성중공업 (해링턴플레이스휴리움)",
-        "stage": "준공 및 입주 단계", "progress": 95, "scale": "지하 3층 ~ 지상 25층, 12개 동"
-    },
-    "대흥2구역": {
-        "lat": 36.3220, "lon": 127.4260, "title": "대흥 2구역 주택재개발", "addr": "대전 중구 대흥동 일원",
-        "bbox": (36.3185, 127.4220, 36.3255, 127.4300),
-        "units": "1,278세대", "builder": "KCC건설 (르에센)",
-        "stage": "철거 완료 및 착공 준비", "progress": 75, "scale": "지하 2층 ~ 지상 29층, 11개 동"
-    }
-}
 
 
 def _normalize_name(name: str) -> str:
@@ -198,18 +74,10 @@ def _extract_geojson_polygon(geojson: dict | None) -> list | None:
     return poly if len(poly) >= 3 else None
 
 
-def get_zone_data(zone_or_addr: str) -> dict | None:
+def get_zone_data(_zone_or_addr: str) -> dict | None:
     """
-    구역명/주소로 정비구역 공식 메트릭 정보(세대수, 시공사, 단계, 진행률 등) 조회
-    반환: 메트릭 dict 또는 None
+    하드코딩 데이터 대신 AI 생성 메타데이터(_current_dashboard_data)를 100% 동적으로 사용
     """
-    if not zone_or_addr:
-        return None
-    clean = _normalize_name(zone_or_addr)
-    for k, info in KNOWN_ZONES.items():
-        norm_k = _normalize_name(k)
-        if norm_k in clean or clean in norm_k:
-            return dict(info)
     return None
 
 
@@ -247,38 +115,35 @@ def _query_nominatim_for_zone(query: str, headers: dict) -> tuple | None:
 
 def resolve_coordinates(zone_or_addr: str) -> tuple | None:
     """
-    구역명 또는 주소를 위도/경도/정식명칭/BBox/다각형(Polygon)으로 변환 (내장 DB 우선 -> 오픈 지오코더 폴백)
+    구역명 또는 주소를 위도/경도/정식명칭/BBox/다각형(Polygon)으로 동적 변환 (전국 오픈 지오코더)
     반환: (lat, lon, display_title, address_text, bbox, polygon) 또는 None
     """
     if not zone_or_addr or not zone_or_addr.strip():
         return None
 
-    clean = _normalize_name(zone_or_addr)
-
-    # 1. 내장 DB 탐색
-    for k, info in KNOWN_ZONES.items():
-        norm_k = _normalize_name(k)
-        if norm_k in clean or clean in norm_k:
-            bbox = info.get("bbox") or (info["lat"] - 0.003, info["lon"] - 0.004, info["lat"] + 0.003, info["lon"] + 0.004)
-            polygon = info.get("polygon") or _bbox_to_polygon(bbox)
-            return info["lat"], info["lon"], info["title"], info["addr"], bbox, polygon
-
-    # 2. 오픈 지오코더(Nominatim) 비동기/동기 조회 (polygon_geojson=1 활성화)
+    # 오픈 지오코더(Nominatim) 비동기/동기 다단계 쿼리 (polygon_geojson=1 활성화)
     search_queries = [zone_or_addr]
     tokens = [w for w in zone_or_addr.split() if not (w and w[0].isdigit() and any(ch in w for ch in ('-', '~', '번지', '호')))]
     simplified = " ".join(tokens).strip()
     if simplified and simplified != zone_or_addr:
         search_queries.append(simplified)
 
-    headers = {"User-Agent": "SinwooRealEstateBlog/1.0 (contact: admin@sinwoo.local)"}
+    # 구역 번호나 지구/단지 접미사를 제거한 행정동/지역명 검색 추가 (예: '한남3구역' -> '한남동', '도마변동5구역' -> '도마동')
+    sub_q = re.sub(r'\d+구역|\d+지구|\d+차|\d+단지', '', zone_or_addr).strip()
+    if sub_q and sub_q not in search_queries:
+        search_queries.append(sub_q)
+        if not sub_q.endswith(('동', '구', '시', '읍', '면', '리', '로', '길')):
+            search_queries.append(sub_q + '동')
+
+    headers = {"User-Agent": "RealEstateBlogBot/1.0 (contact: admin@realestate.local)"}
     for query in search_queries:
         res = _query_nominatim_for_zone(query, headers)
         if res:
             lat, lon, disp_name, bbox, polygon = res
             return lat, lon, zone_or_addr, disp_name, bbox, polygon
 
-    # 지오코딩 실패 시 임의로 대전을 반환하지 않고 None 반환 (엉뚱한 지역 출력 방지)
     return None
+
 
 
 
@@ -388,12 +253,13 @@ def _draw_zone_annotations(
     p.setPen(QColor(148, 163, 184))
     p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
     p.drawText(QRectF(14, height - 30, 360, 30), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "■ 빨간점선: 재개발 정비구역 예정지  ■ 용도: 제2종일반주거지역")
-    p.drawText(QRectF(width - 240, height - 30, 226, 30), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"🏢 {office_name}")
+    if office_name:
+        p.drawText(QRectF(width - 240, height - 30, 226, 30), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"🏢 {office_name}")
 
 
 def generate_zone_map_image(
     zone_or_addr: str,
-    office_name: str = "신우 공인중개사사무소",
+    office_name: str = "",
     display_title: str = ""
 ) -> QImage:
     """
@@ -472,32 +338,48 @@ def open_eum_viewer(zone_or_addr: str):
     webbrowser.open(eum_map_url)
 
 
-def _scan_zone_token(tokens: list, i: int, token: str) -> str:
-    """구역 또는 동 단위 토큰 분석"""
-    clean_tok = _normalize_name(token)
-    if token.endswith("구역"):
-        if i > 0:
-            prev = _normalize_name(tokens[i - 1])
-            if not prev.endswith(("은", "는", "이", "가", "의", "를", "을", "에")):
-                return f"{prev} {clean_tok}"
-        return clean_tok
-    if clean_tok.endswith("동"):
-        return clean_tok
-    return ""
-
-
 def extract_zone_keyword(text: str) -> str:
-    """텍스트(제목, 본문 등)에서 정비구역명 또는 행정동 키워드 추출 (초고속 O(N) 탐색)"""
+    """텍스트(제목, 본문 등)에서 정비구역명 또는 행정동 키워드 동적 추출 (전국 단위)"""
     if not text:
         return ""
-    compact = _normalize_name(text)
-    for k in KNOWN_ZONES:
-        if _normalize_name(k) in compact:
-            return k
-    tokens = text.split()
-    for i, token in enumerate(tokens):
-        found = _scan_zone_token(tokens, i, token)
-        if found:
-            return found
+
+    # 1. 괄호나 대괄호 안의 구역/단지명 우선 탐색
+    bracketed = re.findall(r'\[(.*?)\]|\((.*?)\)', text)
+    for b1, b2 in bracketed:
+        cand = (b1 or b2).strip()
+        if any(cand.endswith(suf) for suf in ("구역", "단지", "지구", "마을", "뉴타운")):
+            return cand
+
+    # 2. 'XX동 Y구역' 형태 탐색 -> 'XX Y구역' 또는 'XXY구역' (예: 탄방동 1구역 -> 탄방1구역)
+    m_dong_zone = re.search(r'([가-힣]{2,})동\s*([0-9]+구역)', text)
+    if m_dong_zone:
+        region = m_dong_zone.group(1)
+        zone_num = m_dong_zone.group(2)
+        if len(region) <= 2:
+            return f"{region}{zone_num}"
+        return f"{region}동{zone_num}"
+
+    # 3. 'XX구역', 'XX단지', 'XX지구', 'XX뉴타운' 등 주요 정비사업 키워드 탐색
+    m_zone = re.search(r'([가-힣0-9·]+(?:구역|단지|지구|뉴타운))', text)
+    if m_zone:
+        cand = m_zone.group(1).strip()
+        # 만약 '1구역'처럼 숫자만 있는 경우 앞 단어 결합
+        if re.match(r'^[0-9·]+구역$', cand):
+            idx = text.find(cand)
+            prefix = text[:idx].strip().split()
+            if prefix:
+                prev_word = re.sub(r"[^가-힣0-9]", "", prefix[-1])
+                return f"{prev_word}{cand}"
+        return cand
+
+    # 4. 행정동 탐색 (예: '한남동', '도마동', '성수동')
+    dong_match = re.search(r'([가-힣]{2,}동)(?:\s|$|[^\w])', text)
+    if dong_match:
+        cand = dong_match.group(1).strip()
+        # 일반 명사 접미사 등 제외
+        if cand not in ("부동산동", "운동", "활동", "공동", "작동", "변동", "자동", "수동", "연동"):
+            return cand
+
     return ""
+
 
