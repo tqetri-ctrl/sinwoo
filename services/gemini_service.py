@@ -54,7 +54,7 @@ def _format_office_info(config: dict) -> str:
     return "\n".join(lines)
 
 
-def _format_freshness_instruction(config: dict) -> str:
+def _format_freshness_instruction(_config: dict | None = None) -> str:
     """최신성 및 연도 왜곡 방지 프롬프트 구성"""
     now = datetime.now()
     current_date_str = now.strftime(DATE_FORMAT_KOREAN)
@@ -118,7 +118,27 @@ def _extract_body(text: str) -> str:
     return cleaned.strip()
 
 
-def _extract_dashboard_data(text: str) -> dict:
+def _parse_dashboard_field(data: dict, k: str, v: str):
+    """대시보드 메타데이터 개별 키-값 매핑 파싱"""
+    if "분류" in k:
+        data["category"] = v
+    elif any(sub in k for sub in ["주제", "구역", "사업지", "대상", "단지", "매물"]):
+        data["target_name"] = v
+    elif any(sub in k for sub in ["단계", "현황"]):
+        data["stage"] = v
+    elif any(sub in k for sub in ["진행률", "공정률"]):
+        digits = re.findall(r'\d+', v)
+        if digits:
+            data["progress"] = min(100, max(0, int(digits[0])))
+    elif "지표" in k or "항목" in k:
+        if "|" in v:
+            m_label, m_val = v.split("|", 1)
+            data["metrics"].append((m_label.strip(), m_val.strip()))
+        else:
+            data["metrics"].append((k, v))
+
+
+def _extract_dashboard_data(text: str) -> dict | None:
     """생성된 텍스트에서 AI가 자동 수집/분석한 인포그래픽 핵심 데이터 파싱"""
     if SECTION_DASHBOARD not in text:
         return None
@@ -138,33 +158,30 @@ def _extract_dashboard_data(text: str) -> dict:
 
     for line in part.strip().splitlines():
         line = line.strip().lstrip("-*• ")
-        if not line:
-            continue
-        if ":" in line:
+        if line and ":" in line:
             k, v = line.split(":", 1)
-            k = k.strip()
-            v = v.strip()
-            if "분류" in k:
-                data["category"] = v
-            elif any(sub in k for sub in ["주제", "구역", "사업지", "대상", "단지", "매물"]):
-                data["target_name"] = v
-            elif any(sub in k for sub in ["단계", "현황"]):
-                data["stage"] = v
-            elif any(sub in k for sub in ["진행률", "공정률"]):
-                digits = re.findall(r'\d+', v)
-                if digits:
-                    data["progress"] = min(100, max(0, int(digits[0])))
-            elif "지표" in k or "항목" in k:
-                if "|" in v:
-                    m_label, m_val = v.split("|", 1)
-                    data["metrics"].append((m_label.strip(), m_val.strip()))
-                else:
-                    data["metrics"].append((k, v))
+            _parse_dashboard_field(data, k.strip(), v.strip())
 
     return data if data["metrics"] or data["target_name"] else None
 
 
-def _extract_map_data(text: str) -> dict:
+EMPTY_METADATA_VALUES = {"없음", "해당 없음", "해당없음", "N/A"}
+
+
+def _parse_map_field(data: dict, k: str, v: str):
+    """지도 메타데이터 개별 필드 파싱"""
+    if "지도생성" in k or "지도필요" in k:
+        val_upper = v.upper()
+        data["need_map"] = not (val_upper.startswith("N") or any(word in v for word in ["아니오", "불필요", "없음"]))
+    elif ("검색어" in k or "위치" in k or "소재지" in k) and v not in EMPTY_METADATA_VALUES:
+        data["map_query"] = v
+    elif ("명칭" in k or "표시" in k or "구역명" in k) and v not in EMPTY_METADATA_VALUES:
+        data["map_title"] = v
+    elif ("설명" in k or "지역" in k) and v not in EMPTY_METADATA_VALUES:
+        data["map_desc"] = v
+
+
+def _extract_map_data(text: str) -> dict | None:
     """생성된 텍스트에서 AI가 분석한 지도 시각화 메타데이터 파싱"""
     if SECTION_MAP_DATA not in text:
         return None
@@ -182,32 +199,15 @@ def _extract_map_data(text: str) -> dict:
 
     for line in part.strip().splitlines():
         line = line.strip().lstrip("-*• ")
-        if not line:
-            continue
-        if ":" in line:
+        if line and ":" in line:
             k, v = line.split(":", 1)
-            k = k.strip()
-            v = v.strip()
-            if "지도생성" in k or "지도필요" in k:
-                val_upper = v.upper()
-                if val_upper.startswith("N") or "아니오" in v or "불필요" in v or "없음" in v:
-                    data["need_map"] = False
-                else:
-                    data["need_map"] = True
-            elif "검색어" in k or "위치" in k or "소재지" in k:
-                if v and v not in ["없음", "해당 없음", "해당없음", "N/A"]:
-                    data["map_query"] = v
-            elif "명칭" in k or "표시" in k or "구역명" in k:
-                if v and v not in ["없음", "해당 없음", "해당없음", "N/A"]:
-                    data["map_title"] = v
-            elif "설명" in k or "지역" in k:
-                if v and v not in ["없음", "해당 없음", "해당없음", "N/A"]:
-                    data["map_desc"] = v
+            _parse_map_field(data, k.strip(), v.strip())
 
     if not data["need_map"]:
         return {"need_map": False, "map_query": "", "map_title": "", "map_desc": ""}
 
     return data if data["map_query"] or data["map_title"] else None
+
 
 
 def _get_image_mime(extension: str) -> str:

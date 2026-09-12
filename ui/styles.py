@@ -411,16 +411,22 @@ def _render_photo_placeholder(cleaned: str) -> str:
     return f'<div class="placeholder-box photo-box"><span class="icon">📸</span><strong>[{prefix}]</strong> {val}</div>'
 
 
-def _render_rule_box(box_cls: str, icon: str, label: str, val: str, has_chart: bool, has_zone_map: bool) -> str:
-    """규칙 기반 박스 또는 시각적 임베드 렌더링"""
-    if box_cls == "data-box" and has_chart:
+def _render_rule_box(box_cls: str, icon: str, label: str, val: str, has_chart: bool, has_zone_map: bool, state: dict = None) -> str:
+    """규칙 기반 박스 또는 시각적 임베드 렌더링 (중복 임베드 자동 방지)"""
+    st = state if state is not None else {}
+    if box_cls == "data-box" and has_chart and not st.get("chart_done", False):
+        st["chart_done"] = True
         return _render_chart_embed(val)
-    if box_cls == "map-box" and has_zone_map:
+    if box_cls == "map-box" and has_zone_map and not st.get("map_done", False):
+        st["map_done"] = True
         return _render_map_embed(val)
+    if box_cls == "map-box" and (st.get("map_done", False) or not has_zone_map):
+        # 이미 지도가 위에서 임베드되었거나 지도가 없는 경우 중복 지도 박스 생략
+        return ""
     return f'<div class="placeholder-box {box_cls}"><span class="icon">{icon}</span><strong>{label}</strong> {val}</div>'
 
 
-def _render_placeholder_box(match, has_chart: bool = False, has_zone_map: bool = False) -> str:
+def _render_placeholder_box(match, has_chart: bool = False, has_zone_map: bool = False, state: dict = None) -> str:
     """플레이스홀더 텍스트를 시각적 요소 카드 또는 실제 이미지 임베드로 변환"""
     raw = match.group(1).strip()
     cleaned = re.sub(r'^[^0-9a-zA-Z가-힣]+', '', raw).strip()
@@ -432,7 +438,7 @@ def _render_placeholder_box(match, has_chart: bool = False, has_zone_map: bool =
     for prefixes, box_cls, icon, label in _PLACEHOLDER_RULES:
         if cleaned.startswith(prefixes):
             val = cleaned.split(":", 1)[1].strip() if ":" in cleaned else cleaned
-            return _render_rule_box(box_cls, icon, label, val, has_chart, has_zone_map)
+            return _render_rule_box(box_cls, icon, label, val, has_chart, has_zone_map, state)
 
     return match.group(0)
 
@@ -448,11 +454,13 @@ def generate_blog_preview_html(
     네이버 블로그 스마트에디터 ONE과 흡사한 단정하고 깔끔한 HTML 미리보기 렌더링 생성
     (실제 생성된 인포그래픽 차트 및 구역 지도 이미지 인라인 임베드 지원)
     """
+    embed_state = {"chart_done": False, "map_done": False}
+
     # 마크다운 ➔ HTML 변환 (tables 확장 포함)
     html_body = markdown.markdown(body_markdown, extensions=['extra', 'nl2br', 'tables'])
     html_body = re.sub(
         r'\[([^\]\r\n]+)\]',
-        lambda m: _render_placeholder_box(m, has_chart, has_zone_map),
+        lambda m: _render_placeholder_box(m, has_chart, has_zone_map, embed_state),
         html_body
     )
     # p 태그로 감싸진 visual-card 테이블 블록 정제 (불필요한 p 마진 제거)

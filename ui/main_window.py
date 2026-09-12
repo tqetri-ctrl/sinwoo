@@ -30,8 +30,13 @@ from prompts.blog_templates import TONE_PRESETS
 from services.chart_service import extract_summary_items, render_infographic_card, copy_chart_to_clipboard
 from services.gemini_service import GeminiBlogService
 from services.news_search_service import fetch_yonhap_realestate_news
-from services.zone_map_service import generate_zone_map_image, copy_zone_map_to_clipboard, open_eum_viewer, KNOWN_ZONES, get_zone_data
+from services.zone_map_service import (
+    generate_zone_map_image, copy_zone_map_to_clipboard, open_eum_viewer,
+    KNOWN_ZONES, get_zone_data, extract_zone_keyword
+)
+from ui.settings_dialog import SettingsDialog
 from ui.styles import MAIN_STYLESHEET, generate_blog_preview_html
+from ui.threads import YonhapNewsLoadThread, BlogGenerationThread
 
 DEFAULT_MODEL_NAME = "gemini-3.6-flash"
 FLASH_35_MODEL_NAME = "gemini-3.5-flash"
@@ -42,232 +47,8 @@ CARD_HEADER_STYLE = "font-weight: bold; font-size: 16px; color: #1E293B;"
 GRID_LABEL_STYLE = "font-weight: 600; color: #334155; font-size: 13px;"
 
 
-class YonhapNewsLoadThread(QThread):
-    """연합뉴스 경제 RSS에서 부동산 속보 피드를 백그라운드 비동기로 수집하는 스레드"""
-    news_loaded_signal = pyqtSignal(list)
-
-    def run(self):
-        try:
-            articles = fetch_yonhap_realestate_news(max_results=12)
-            self.news_loaded_signal.emit(articles)
-        except Exception:
-            self.news_loaded_signal.emit([])
-
-
-class BlogGenerationThread(QThread):
-    """Gemini API 호출을 비동기로 처리하는 백그라운드 스레드"""
-    finished_signal = pyqtSignal(dict)
-    error_signal = pyqtSignal(str)
-
-    def __init__(
-        self,
-        service: GeminiBlogService,
-        mode: str,
-        topic: str = "",
-        file_paths: list = None,
-        property_info: dict = None,
-        tone_key: str = "neighbor",
-        config: dict = None
-    ):
-        super().__init__()
-        self.service = service
-        self.mode = mode
-        self.topic = topic
-        self.file_paths = file_paths or []
-        self.property_info = property_info
-        self.tone_key = tone_key
-        self.config = config
-
-    def run(self):
-        try:
-            result = self.service.generate_blog_post(
-                mode=self.mode,
-                topic=self.topic,
-                file_paths=self.file_paths,
-                property_info=self.property_info,
-                tone_key=self.tone_key,
-                config=self.config
-            )
-            self.finished_signal.emit(result)
-        except Exception as e:
-            self.error_signal.emit(str(e))
-
-
-class SettingsDialog(QDialog):
-    """간편 설정 창 (API 키 & 중개사무소 정보)"""
-    def __init__(self, parent=None, config=None):
-        super().__init__(parent)
-        self.setWindowTitle("⚙️ 프로그램 설정 (API 키 및 사무소 정보)")
-        self.setFixedWidth(540)
-        self.config = config or {}
-        self.init_ui()
-
-    def init_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(24, 24, 24, 24)
-
-        # 1. API 키 섹션
-        api_group = QFrame()
-        api_group.setObjectName("CardFrame")
-        api_layout = QVBoxLayout(api_group)
-        
-        lbl_api_title = QLabel("🔑 Google Gemini API 키")
-        lbl_api_title.setStyleSheet(CARD_HEADER_STYLE)
-        api_layout.addWidget(lbl_api_title)
-
-        lbl_api_desc = QLabel("무료로 발급받은 Gemini API 키를 입력하세요. (한 번 입력하면 자동 저장됩니다)")
-        lbl_api_desc.setStyleSheet("color: #64748B; font-size: 14px;")
-        lbl_api_desc.setWordWrap(True)
-        api_layout.addWidget(lbl_api_desc)
-
-        self.edit_api_key = QLineEdit()
-        self.edit_api_key.setPlaceholderText("AIzaSy... 형식의 API 키를 붙여넣으세요")
-        self.edit_api_key.setText(self.config.get("gemini_api_key", ""))
-        self.edit_api_key.setEchoMode(QLineEdit.EchoMode.Password)
-        api_layout.addWidget(self.edit_api_key)
-
-        # 모델 선택 (공식 안정 모델 4종)
-        model_layout = QHBoxLayout()
-        model_layout.addWidget(QLabel("사용 모델:"))
-        self.combo_model = QComboBox()
-        self.combo_model.addItems([
-            f"{DEFAULT_MODEL_NAME} (기본 추천: 최신 3.6 Flash / 안정)",
-            f"{FLASH_35_MODEL_NAME} (3.5 Flash 지능형 / 안정)",
-            f"{FLASH_35_LITE_MODEL_NAME} (3.5 Flash-Lite 고속·효율 / 안정)",
-            f"{FLASH_31_LITE_MODEL_NAME} (3.1 Flash-Lite 비용 최적화 / 안정)"
-        ])
-        selected_model = self.config.get("selected_model", DEFAULT_MODEL_NAME)
-        if "3.5-flash-lite" in selected_model:
-            self.combo_model.setCurrentIndex(2)
-        elif "3.5" in selected_model:
-            self.combo_model.setCurrentIndex(1)
-        elif "3.1" in selected_model:
-            self.combo_model.setCurrentIndex(3)
-        else:
-            self.combo_model.setCurrentIndex(0)
-        model_layout.addWidget(self.combo_model)
-        api_layout.addLayout(model_layout)
-
-        layout.addWidget(api_group)
-
-        # 2. 공인중개사 사무소 서명 정보
-        office_group = QFrame()
-        office_group.setObjectName("CardFrame")
-        office_layout = QVBoxLayout(office_group)
-
-        lbl_office_title = QLabel("🏢 공인중개사 정보 (글 하단에 자동 추가)")
-        lbl_office_title.setStyleSheet(CARD_HEADER_STYLE)
-        office_layout.addWidget(lbl_office_title)
-
-        self.chk_include_office = QCheckBox("블로그 글 끝에 우리 부동산 사무소 정보를 항상 넣기")
-        self.chk_include_office.setChecked(self.config.get("include_office_info", True))
-        office_layout.addWidget(self.chk_include_office)
-
-        form_grid = QGridLayout()
-        form_grid.setSpacing(8)
-
-        form_grid.addWidget(QLabel("사무소 상호:"), 0, 0)
-        self.edit_office_name = QLineEdit()
-        self.edit_office_name.setPlaceholderText("예: 신우 공인중개사사무소")
-        self.edit_office_name.setText(self.config.get("office_name", ""))
-        form_grid.addWidget(self.edit_office_name, 0, 1)
-
-        form_grid.addWidget(QLabel("대표자 성명:"), 1, 0)
-        self.edit_agent_name = QLineEdit()
-        self.edit_agent_name.setPlaceholderText("예: 대표 공인중개사 박혜숙")
-        self.edit_agent_name.setText(self.config.get("agent_name", ""))
-        form_grid.addWidget(self.edit_agent_name, 1, 1)
-
-        form_grid.addWidget(QLabel("연락처/전화:"), 2, 0)
-        self.edit_office_phone = QLineEdit()
-        self.edit_office_phone.setPlaceholderText("예: 042-535-7008 / 010-XXXX-XXXX")
-        self.edit_office_phone.setText(self.config.get("office_phone", ""))
-        form_grid.addWidget(self.edit_office_phone, 2, 1)
-
-        form_grid.addWidget(QLabel("사무소 위치:"), 3, 0)
-        self.edit_office_location = QLineEdit()
-        self.edit_office_location.setPlaceholderText("예: 대전광역시 서구 도마동 80-37")
-        self.edit_office_location.setText(self.config.get("office_location", ""))
-        form_grid.addWidget(self.edit_office_location, 3, 1)
-
-        office_layout.addLayout(form_grid)
-        layout.addWidget(office_group)
-
-        # 3. 실시간 뉴스 검색 API 섹션 (하이브리드 지원)
-        naver_group = QFrame()
-        naver_group.setObjectName("CardFrame")
-        naver_layout = QVBoxLayout(naver_group)
-
-        lbl_naver_title = QLabel("🟢 실시간 뉴스 검색 (하이브리드 지원)")
-        lbl_naver_title.setStyleSheet(CARD_HEADER_STYLE)
-        naver_layout.addWidget(lbl_naver_title)
-
-        lbl_naver_desc = QLabel(
-            "기본적으로 **무료 실시간 뉴스 검색(키 불필요)**이 자동 작동합니다.\n"
-            "네이버 공식 뉴스 검색 API(일 25,000건 무료)를 이용하시려면 아래에 입력하세요. (선택 사항)"
-        )
-        lbl_naver_desc.setStyleSheet("color: #64748B; font-size: 13px;")
-        lbl_naver_desc.setWordWrap(True)
-        naver_layout.addWidget(lbl_naver_desc)
-
-        naver_grid = QGridLayout()
-        naver_grid.setSpacing(8)
-        naver_grid.addWidget(QLabel("Naver Client ID:"), 0, 0)
-        self.edit_naver_id = QLineEdit()
-        self.edit_naver_id.setPlaceholderText("네이버 Client ID (비워두면 무료 오픈 검색 사용)")
-        self.edit_naver_id.setText(self.config.get("naver_client_id", ""))
-        naver_grid.addWidget(self.edit_naver_id, 0, 1)
-
-        naver_grid.addWidget(QLabel("Naver Secret:"), 1, 0)
-        self.edit_naver_secret = QLineEdit()
-        self.edit_naver_secret.setPlaceholderText("네이버 Client Secret")
-        self.edit_naver_secret.setText(self.config.get("naver_client_secret", ""))
-        self.edit_naver_secret.setEchoMode(QLineEdit.EchoMode.Password)
-        naver_grid.addWidget(self.edit_naver_secret, 1, 1)
-
-        naver_layout.addLayout(naver_grid)
-        layout.addWidget(naver_group)
-
-        # 4. 저장 및 닫기 버튼
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        btn_cancel = QPushButton("취소")
-        btn_cancel.clicked.connect(self.reject)
-        btn_layout.addWidget(btn_cancel)
-
-        btn_save = QPushButton("💾 저장하기")
-        btn_save.setStyleSheet("background-color: #2563EB; color: white; font-weight: bold; padding: 8px 20px;")
-        btn_save.clicked.connect(self.save_and_close)
-        btn_layout.addWidget(btn_save)
-
-        layout.addLayout(btn_layout)
-
-    def save_and_close(self):
-        self.config["gemini_api_key"] = self.edit_api_key.text().strip()
-        idx = self.combo_model.currentIndex()
-        if idx == 1:
-            self.config["selected_model"] = FLASH_35_MODEL_NAME
-        elif idx == 2:
-            self.config["selected_model"] = FLASH_35_LITE_MODEL_NAME
-        elif idx == 3:
-            self.config["selected_model"] = FLASH_31_LITE_MODEL_NAME
-        else:
-            self.config["selected_model"] = DEFAULT_MODEL_NAME
-        self.config["include_office_info"] = self.chk_include_office.isChecked()
-        self.config["office_name"] = self.edit_office_name.text().strip()
-        self.config["agent_name"] = self.edit_agent_name.text().strip()
-        self.config["office_phone"] = self.edit_office_phone.text().strip()
-        self.config["office_location"] = self.edit_office_location.text().strip()
-        self.config["naver_client_id"] = self.edit_naver_id.text().strip()
-        self.config["naver_client_secret"] = self.edit_naver_secret.text().strip()
-        
-        save_config(self.config)
-        self.accept()
-
-
 class MainWindow(QMainWindow):
+
     def __init__(self):
         super().__init__()
         self.config = load_config()
@@ -283,6 +64,7 @@ class MainWindow(QMainWindow):
         self._current_chart_img = None
         self._current_zone_map_img = None
         self._current_dashboard_data = None
+        self._current_map_data = None
 
         self.init_window()
         self.init_ui()
@@ -1212,6 +994,7 @@ class MainWindow(QMainWindow):
 
         # 3.5. AI가 실시간 자동 수집/추출한 인포그래픽 핵심 지표 데이터 보관
         self._current_dashboard_data = result.get("dashboard_data")
+        self._current_map_data = result.get("map_data")
 
         # 4. 차트 및 구역 지도 비주얼 생성 및 바인딩
         self.generate_preview_visuals(force_refresh=True)
@@ -1317,8 +1100,23 @@ class MainWindow(QMainWindow):
 
     def _create_current_zone_map(self) -> QImage:
         """현재 구역/소재지 기반 정비구역 위치도 이미지 생성"""
-        zone_query = self._get_current_zone_or_location()
         office_name = self.config.get("office_name", "").strip() or "신우 공인중개사사무소"
+
+        # 1. AI 분석 결과에서 지도가 불필요하다고 판단한 경우(거시 정책, 금리, 규제 등) 지도 생성 생략
+        if self._current_map_data:
+            if not self._current_map_data.get("need_map", True):
+                return None
+            map_query = self._current_map_data.get("map_query")
+            map_title = self._current_map_data.get("map_title")
+            if map_query:
+                img = generate_zone_map_image(map_query, office_name=office_name, display_title=map_title)
+                if img:
+                    return img
+
+        # 2. 직접 입력 또는 기존 키워드 기반 탐색
+        zone_query = self._get_current_zone_or_location()
+        if not zone_query:
+            return None
         return generate_zone_map_image(zone_query, office_name=office_name)
 
     def generate_preview_visuals(self, force_refresh: bool = False):
@@ -1467,81 +1265,54 @@ class MainWindow(QMainWindow):
         QApplication.clipboard().setText(tags_text)
         QMessageBox.information(self, "복사 완료", "해시태그가 클립보드에 복사되었습니다.")
 
-    @staticmethod
-    def _clean_korean_word(text: str) -> str:
-        """공백 및 특수기호를 제거한 순수 한글/영숫자 단어 추출"""
-        return re.sub(r"[^0-9a-zA-Z가-힣]", "", text)
-
-    def _match_known_zone(self, text: str) -> str:
-        """내장 정비구역 DB 매칭"""
-        compact = self._clean_korean_word(text)
-        for k in KNOWN_ZONES:
-            if k in compact:
-                return k
-        return ""
-
-    def _scan_zone_token(self, tokens: list, i: int, token: str) -> str:
-        """구역 또는 동 단위 토큰 분석"""
-        clean_tok = self._clean_korean_word(token)
-        if token.endswith("구역"):
-            if i > 0:
-                prev = self._clean_korean_word(tokens[i - 1])
-                if not prev.endswith(("은", "는", "이", "가", "의", "를", "을", "에")):
-                    return f"{prev} {clean_tok}"
-            return clean_tok
-        if clean_tok.endswith("동"):
-            return clean_tok
-        return ""
-
-    def _extract_zone_keyword(self, text: str) -> str:
-        """텍스트에서 정비구역명 또는 행정동 키워드 추출 (초고속 O(N) 탐색)"""
-        if not text:
-            return ""
-        known = self._match_known_zone(text)
-        if known:
-            return known
-        tokens = text.split()
-        for i, token in enumerate(tokens):
-            found = self._scan_zone_token(tokens, i, token)
-            if found:
-                return found
+    def _get_mode_location_candidate(self, mode_idx: int) -> str:
+        """현재 UI 입력 모드에 따른 위치/주제 텍스트 후보 반환"""
+        if mode_idx == 0:
+            return self.edit_prop_location.text().strip()
+        if mode_idx == 1:
+            return self.edit_news_topic.toPlainText().strip()
+        if mode_idx == 2:
+            return self.edit_file_topic.text().strip()
         return ""
 
     def _get_current_zone_or_location(self) -> str:
-        """현재 입력 모드나 본문에서 구역명 또는 소재지 위치 추출"""
+        """현재 입력 모드나 AI 메타데이터에서 구역명 또는 소재지 위치 추출"""
+        if self._current_map_data and self._current_map_data.get("map_query"):
+            return self._current_map_data["map_query"]
+
+        if self._current_dashboard_data and self._current_dashboard_data.get("target_name"):
+            found = extract_zone_keyword(self._current_dashboard_data["target_name"])
+            if found:
+                return found
+
         mode_idx = self.stacked_input.currentIndex()
-        if mode_idx == 0:
-            loc = self.edit_prop_location.text().strip()
-            if loc:
-                return loc
-        elif mode_idx == 1:
-            topic = self.edit_news_topic.toPlainText().strip()
-            if topic:
-                found = self._extract_zone_keyword(topic)
-                if found:
-                    return found
-                return topic[:20]
-        elif mode_idx == 2:
-            topic = self.edit_file_topic.text().strip()
-            if topic:
-                return topic[:20]
+        cand = self._get_mode_location_candidate(mode_idx)
+        if mode_idx == 0 and cand:
+            return cand
+        if cand:
+            found = extract_zone_keyword(cand)
+            if found:
+                return found
 
         title = self.combo_titles.currentText()
-        found = self._extract_zone_keyword(title)
-        if found:
-            return found
+        return extract_zone_keyword(title) if title else ""
 
-        return "도마변동5구역"
+
 
     def on_copy_zone_map(self):
         """정비구역 위치도/지적 약도 이미지를 생성하여 클립보드에 복사"""
-        zone_query = self._get_current_zone_or_location()
         img = self._current_zone_map_img or self._create_current_zone_map()
         if img is None or img.isNull():
-            QMessageBox.warning(self, "오류", "구역 지도 이미지를 생성하지 못했습니다.")
+            QMessageBox.information(
+                self,
+                "지도 복사 안내 🗺️",
+                "이 포스팅은 거시 경제/금융 정책/세제 등 특정 지리적 위치가 없는 주제입니다.\n\n"
+                "대신 핵심 통계와 로드맵이 담긴 상단 [📊 차트 복사] 버튼을 활용해보세요!"
+            )
             return
         self._current_zone_map_img = img
 
+        zone_query = self._get_current_zone_or_location() or "정비구역"
         if copy_zone_map_to_clipboard(img):
             QMessageBox.information(
                 self,
