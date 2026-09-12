@@ -16,7 +16,8 @@ from PyQt6.QtWidgets import (
     QLabel, QLineEdit, QTextEdit, QPushButton, QRadioButton, QButtonGroup,
     QTabWidget, QFileDialog, QMessageBox, QFrame, QSplitter,
     QDialog, QCheckBox, QComboBox, QTextBrowser, QApplication, QProgressBar,
-    QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea, QStackedWidget
+    QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea, QStackedWidget,
+    QSizePolicy
 )
 # pyrefly: ignore [missing-import]
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QMimeData
@@ -267,9 +268,24 @@ class MainWindow(QMainWindow):
 
     def init_window(self):
         self.setWindowTitle("신우 공인중개사 | AI 네이버 블로그 글 생성기")
-        self.resize(1260, 780)
-        self.setMinimumSize(680, 480)
         self.setStyleSheet(MAIN_STYLESHEET)
+
+        # 1920x1080 등 대다수 FHD 환경에서 한눈에 꽉 차고 시원하게 보이도록 화면 해상도 기반 최적 크기 계산 (약 85~88%)
+        screen = QApplication.primaryScreen()
+        if screen:
+            avail_geo = screen.availableGeometry()
+            target_w = min(1560, max(1280, int(avail_geo.width() * 0.86)))
+            target_h = min(960, max(800, int(avail_geo.height() * 0.88)))
+            self.resize(target_w, target_h)
+
+            # 화면 중앙 정렬
+            x = avail_geo.x() + (avail_geo.width() - target_w) // 2
+            y = avail_geo.y() + (avail_geo.height() - target_h) // 2
+            self.move(x, y)
+        else:
+            self.resize(1500, 880)
+
+        self.setMinimumSize(920, 600)
 
     def init_ui(self):
         main_widget = QWidget()
@@ -285,7 +301,7 @@ class MainWindow(QMainWindow):
         # 본문 반응형 스플리터 (화면 크기에 따라 가로/세로 유연하게 자동 조절)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(False)
-        self.splitter.setContentsMargins(10, 6, 10, 6)
+        self.splitter.setContentsMargins(12, 8, 12, 8)
         self.splitter.setHandleWidth(8)
 
         # 좌측: 1-2-3단계 입력 영역
@@ -296,7 +312,8 @@ class MainWindow(QMainWindow):
         right_panel = self.create_right_result_panel()
         self.splitter.addWidget(right_panel)
 
-        self.splitter.setSizes([540, 720])
+        # 1920x1080 FHD 기준 좌측 입력창과 우측 미리보기가 모두 넉넉하게 보이도록 최적 비율 설정
+        self.splitter.setSizes([600, 920])
         self.splitter.setStretchFactor(0, 4)
         self.splitter.setStretchFactor(1, 6)
         main_layout.addWidget(self.splitter)
@@ -306,17 +323,17 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         width = event.size().width()
 
-        # 920px 미만 (작은 창, 세로 모니터, 윈도우 좌우 분할 스냅): 상하 세로 분할로 자동 전환
-        if width < 920:
+        # 960px 미만 (작은 창, 세로 모니터, 윈도우 좌우 분할 스냅): 상하 세로 분할로 자동 전환
+        if width < 960:
             if self.splitter.orientation() != Qt.Orientation.Vertical:
                 self.splitter.setOrientation(Qt.Orientation.Vertical)
                 self.splitter.setSizes([380, 450])
             self.lbl_subtitle.setVisible(False)
         else:
-            # 920px 이상 (일반 가로 모니터): 좌우 2단 컬럼으로 자동 복귀
+            # 960px 이상 (일반 가로 모니터): 좌우 2단 컬럼으로 자동 복귀
             if self.splitter.orientation() != Qt.Orientation.Horizontal:
                 self.splitter.setOrientation(Qt.Orientation.Horizontal)
-                self.splitter.setSizes([540, 720])
+                self.splitter.setSizes([600, 920])
             self.lbl_subtitle.setVisible(True)
 
     def create_header(self) -> QWidget:
@@ -324,31 +341,33 @@ class MainWindow(QMainWindow):
         header = QFrame()
         header.setObjectName("HeaderCard")
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(14, 6, 14, 6)
+        layout.setContentsMargins(16, 8, 16, 8)
+        layout.setSpacing(12)
 
         # 좌측 타이틀 (가로 인라인 배치로 위아래 낭비 공간 최소화)
         title_layout = QHBoxLayout()
-        title_layout.setSpacing(8)
+        title_layout.setSpacing(10)
         self.lbl_title = QLabel('🏢 <span style="color: #1D4ED8; font-weight: 800; font-size: 18px;">신우 공인중개사</span> <span style="color: #CBD5E1; font-weight: 300; font-size: 16px;">|</span> <span style="color: #0F172A; font-weight: 700; font-size: 17px;">AI 네이버 블로그 글 생성기</span>')
         self.lbl_title.setObjectName("AppTitle")
-        title_layout.addWidget(self.lbl_title)
+        title_layout.addWidget(self.lbl_title, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self.lbl_subtitle = QLabel("· 현장 사진 매물 소개부터 부동산 정책/이슈 브리핑까지 원클릭 자동 생성")
-        self.lbl_subtitle.setStyleSheet("color: #64748B; font-size: 13px; margin-top: 2px;")
-        title_layout.addWidget(self.lbl_subtitle)
+        self.lbl_subtitle.setStyleSheet("color: #64748B; font-size: 13px;")
+        title_layout.addWidget(self.lbl_subtitle, 0, Qt.AlignmentFlag.AlignVCenter)
         layout.addLayout(title_layout)
 
         layout.addStretch()
 
         # 우측 상태 및 설정 버튼
         self.lbl_api_status = QLabel("🟢 API 연결 완료")
-        self.lbl_api_status.setStyleSheet("font-weight: bold; font-size: 13px; padding: 4px 10px; border-radius: 10px; background: #DCFCE7; color: #166534;")
-        layout.addWidget(self.lbl_api_status)
+        self.lbl_api_status.setStyleSheet("font-weight: bold; font-size: 13px; padding: 5px 12px; border-radius: 6px; background: #DCFCE7; color: #166534;")
+        layout.addWidget(self.lbl_api_status, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self.btn_settings = QPushButton("⚙️ 환경 설정 (API 키)")
         self.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_settings.setStyleSheet("padding: 5px 12px; font-size: 13px;")
         self.btn_settings.clicked.connect(self.open_settings_dialog)
-        layout.addWidget(self.btn_settings)
+        layout.addWidget(self.btn_settings, 0, Qt.AlignmentFlag.AlignVCenter)
 
         return header
 
@@ -356,10 +375,10 @@ class MainWindow(QMainWindow):
         key = self.config.get("gemini_api_key", "").strip()
         if key:
             self.lbl_api_status.setText("🟢 API 키 등록됨")
-            self.lbl_api_status.setStyleSheet("font-weight: bold; font-size: 13px; padding: 4px 10px; border-radius: 10px; background: #DCFCE7; color: #166534;")
+            self.lbl_api_status.setStyleSheet("font-weight: bold; font-size: 13px; padding: 5px 12px; border-radius: 6px; background: #DCFCE7; color: #166534;")
         else:
             self.lbl_api_status.setText("🟡 API 키 필요 (클릭)")
-            self.lbl_api_status.setStyleSheet("font-weight: bold; font-size: 13px; padding: 4px 10px; border-radius: 10px; background: #FEF3C7; color: #92400E; cursor: pointer;")
+            self.lbl_api_status.setStyleSheet("font-weight: bold; font-size: 13px; padding: 5px 12px; border-radius: 6px; background: #FEF3C7; color: #92400E; cursor: pointer;")
 
     def open_settings_dialog(self):
         dlg = SettingsDialog(self, self.config)
@@ -386,7 +405,7 @@ class MainWindow(QMainWindow):
         scroll_content = QWidget()
         layout = QVBoxLayout(scroll_content)
         layout.setContentsMargins(0, 0, 4, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(8)
 
         # ----------------------------------------------------
         # [1단계] 글감 넣기 카드 (3개 탭)
@@ -394,18 +413,19 @@ class MainWindow(QMainWindow):
         card_step1 = QFrame()
         card_step1.setObjectName("CardFrame")
         layout_step1 = QVBoxLayout(card_step1)
-        layout_step1.setContentsMargins(10, 8, 10, 8)
-        layout_step1.setSpacing(6)
+        layout_step1.setContentsMargins(12, 10, 12, 10)
+        layout_step1.setSpacing(8)
 
         header_step1 = QHBoxLayout()
+        header_step1.setSpacing(8)
         badge1 = QLabel("1단계")
         badge1.setObjectName("StepBadge")
-        title1 = QLabel("글감 종류:")
+        title1 = QLabel("글감 종류 선택:")
         title1.setObjectName("StepTitle")
         header_step1.addWidget(badge1)
         header_step1.addWidget(title1)
 
-        # 드롭다운 선택 메뉴 (좁은 창에서도 가려짐 없이 깔끔하게 선택)
+        # 드롭다운 선택 메뉴 (여유로운 너비로 가려짐 없이 깔끔하게 표시)
         self.combo_input_mode = QComboBox()
         self.combo_input_mode.addItems([
             "🏠 현장 사진 매물 소개 (매매/전세/월세)",
@@ -414,8 +434,9 @@ class MainWindow(QMainWindow):
         ])
         self.combo_input_mode.setStyleSheet(
             "font-weight: bold; color: #1D4ED8; font-size: 14px; "
-            "padding: 4px 8px; background-color: #EFF6FF; border: 1.5px solid #93C5FD;"
+            "padding: 5px 10px; background-color: #EFF6FF; border: 1.5px solid #93C5FD;"
         )
+        self.combo_input_mode.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         header_step1.addWidget(self.combo_input_mode, 1)
         layout_step1.addLayout(header_step1)
 
@@ -429,53 +450,73 @@ class MainWindow(QMainWindow):
         tab_property = QWidget()
         tab_prop_layout = QVBoxLayout(tab_property)
         tab_prop_layout.setContentsMargins(0, 4, 0, 0)
-        tab_prop_layout.setSpacing(5)
+        tab_prop_layout.setSpacing(6)
 
-        # 1) 거래 유형 및 매물 종류 선택
-        prop_top_layout = QHBoxLayout()
-        prop_top_layout.addWidget(QLabel("거래 형태:"))
+        # 1) 거래 유형 및 매물 종류 선택 (안정적인 4열 그리드 분할)
+        prop_top_grid = QGridLayout()
+        prop_top_grid.setHorizontalSpacing(8)
+        prop_top_grid.setVerticalSpacing(4)
+
+        lbl_deal = QLabel("거래 형태:")
+        lbl_deal.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        prop_top_grid.addWidget(lbl_deal, 0, 0)
         self.combo_deal_type = QComboBox()
         self.combo_deal_type.addItems(["월세 (보증금/월세)", "전세", "매매", "단기임대", "분양/임대", "기타"])
-        prop_top_layout.addWidget(self.combo_deal_type)
+        prop_top_grid.addWidget(self.combo_deal_type, 0, 1)
 
-        prop_top_layout.addWidget(QLabel("매물 종류:"))
+        lbl_ptype = QLabel("매물 종류:")
+        lbl_ptype.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        prop_top_grid.addWidget(lbl_ptype, 0, 2)
         self.combo_prop_type = QComboBox()
         self.combo_prop_type.addItems(["아파트", "오피스텔", "빌라/다세대", "원룸/투룸", "상가/사무실", "단독/다가구", "토지/공장/창고", "기타"])
-        prop_top_layout.addWidget(self.combo_prop_type)
-        tab_prop_layout.addLayout(prop_top_layout)
+        prop_top_grid.addWidget(self.combo_prop_type, 0, 3)
+
+        prop_top_grid.setColumnStretch(1, 1)
+        prop_top_grid.setColumnStretch(3, 1)
+        tab_prop_layout.addLayout(prop_top_grid)
 
         # 2) 매물 기본 정보 입력 그리드
         prop_grid = QGridLayout()
-        prop_grid.setSpacing(4)
+        prop_grid.setHorizontalSpacing(8)
+        prop_grid.setVerticalSpacing(5)
 
-        prop_grid.addWidget(QLabel("매물 위치/이름:"), 0, 0)
+        lbl_loc = QLabel("매물 위치/이름:")
+        lbl_loc.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        prop_grid.addWidget(lbl_loc, 0, 0)
         self.edit_prop_location = QLineEdit()
         self.edit_prop_location.setPlaceholderText("예: 역삼동 신축 오피스텔 (역삼역 도보 3분)")
         prop_grid.addWidget(self.edit_prop_location, 0, 1)
 
-        prop_grid.addWidget(QLabel("가격 조건:"), 1, 0)
+        lbl_price = QLabel("가격 조건:")
+        lbl_price.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        prop_grid.addWidget(lbl_price, 1, 0)
         self.edit_prop_price = QLineEdit()
         self.edit_prop_price.setPlaceholderText("예: 보증금 3,000만원 / 월세 150만원 (또는 매매 12억)")
         prop_grid.addWidget(self.edit_prop_price, 1, 1)
 
-        prop_grid.addWidget(QLabel("면적/구조/층수:"), 2, 0)
+        lbl_area = QLabel("면적/구조/층수:")
+        lbl_area.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        prop_grid.addWidget(lbl_area, 2, 0)
         self.edit_prop_area = QLineEdit()
         self.edit_prop_area.setPlaceholderText("예: 전용 59㎡(18평) / 방2 화1 / 15층 중 8층 (남향)")
         prop_grid.addWidget(self.edit_prop_area, 2, 1)
 
-        prop_grid.addWidget(QLabel("특장점/옵션:"), 3, 0)
+        lbl_feat = QLabel("특장점/옵션:")
+        lbl_feat.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        prop_grid.addWidget(lbl_feat, 3, 0)
         self.edit_prop_features = QLineEdit()
         self.edit_prop_features.setPlaceholderText("예: 올수리 첫입주, 시스템에어컨 풀옵션, 주차가능, 채광굿")
         prop_grid.addWidget(self.edit_prop_features, 3, 1)
 
-        prop_grid.addWidget(QLabel("추가 전달사항:"), 4, 0)
+        lbl_memo = QLabel("추가 전달사항:")
+        lbl_memo.setStyleSheet("font-weight: 600; color: #334155; font-size: 13px;")
+        prop_grid.addWidget(lbl_memo, 4, 0)
         self.edit_prop_memo = QLineEdit()
         self.edit_prop_memo.setPlaceholderText("예: 즉시입주 협의가능, 신혼부부나 직장인에게 강추")
         prop_grid.addWidget(self.edit_prop_memo, 4, 1)
 
         prop_grid.setColumnStretch(0, 0)
         prop_grid.setColumnStretch(1, 1)
-
         tab_prop_layout.addLayout(prop_grid)
 
         # 3) 현장 사진 다중 첨부 영역
@@ -487,12 +528,13 @@ class MainWindow(QMainWindow):
 
         btn_add_photos = QPushButton("📸 사진 추가")
         btn_add_photos.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_add_photos.setStyleSheet("background-color: #2563EB; color: white; font-weight: bold;")
+        btn_add_photos.setStyleSheet("background-color: #2563EB; color: white; font-weight: bold; padding: 4px 10px; font-size: 13px;")
         btn_add_photos.clicked.connect(self.on_add_property_photos)
         photo_header.addWidget(btn_add_photos)
 
         btn_clear_photos = QPushButton("전체 비우기")
         btn_clear_photos.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_clear_photos.setStyleSheet("padding: 4px 10px; font-size: 13px;")
         btn_clear_photos.clicked.connect(self.on_clear_property_photos)
         photo_header.addWidget(btn_clear_photos)
 
@@ -501,12 +543,13 @@ class MainWindow(QMainWindow):
         # 사진 파일 목록 리스트 위젯
         self.list_photos = QListWidget()
         self.list_photos.setObjectName("PhotoList")
-        self.list_photos.setFixedHeight(62)
+        self.list_photos.setFixedHeight(64)
         self.list_photos.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         tab_prop_layout.addWidget(self.list_photos)
 
-        self.chk_prop_local_search = QCheckBox("🌐 주변 최신 개발 호재 및 시세 실시간 검색 반영 (최신성 강화)")
+        self.chk_prop_local_search = QCheckBox("🌐 주변 최신 개발 호재 및 시세 실시간 검색 반영")
         self.chk_prop_local_search.setChecked(self.config.get("enable_local_search", False))
+        self.chk_prop_local_search.setToolTip("매물 소재지 주변의 최신 교통망, 개발 호재, 시세를 실시간 검색하여 입지 분석에 반영합니다.")
         self.chk_prop_local_search.setStyleSheet("color: #475569; font-size: 13px; margin-top: 2px;")
         tab_prop_layout.addWidget(self.chk_prop_local_search)
 
