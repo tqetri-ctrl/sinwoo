@@ -8,6 +8,7 @@
 """
 
 import os
+import re
 import sys
 from datetime import datetime
 # pyrefly: ignore [missing-import]
@@ -29,6 +30,7 @@ from prompts.blog_templates import TONE_PRESETS
 from services.chart_service import extract_summary_items, render_infographic_card, copy_chart_to_clipboard
 from services.gemini_service import GeminiBlogService
 from services.news_search_service import fetch_yonhap_realestate_news
+from services.zone_map_service import generate_zone_map_image, copy_zone_map_to_clipboard, open_eum_viewer
 from ui.styles import MAIN_STYLESHEET, generate_blog_preview_html
 
 DEFAULT_MODEL_NAME = "gemini-3.6-flash"
@@ -862,13 +864,30 @@ class MainWindow(QMainWindow):
         action_header.addWidget(self.btn_copy_naver)
 
         # 고화질 차트 이미지 복사 버튼 (파란색)
-        self.btn_copy_chart = QPushButton("📊 차트 이미지 복사")
+        self.btn_copy_chart = QPushButton("📊 차트 복사")
         self.btn_copy_chart.setObjectName("ChartCopyButton")
+        self.btn_copy_chart.setToolTip("통계 및 핵심 요약 카드 인포그래픽 이미지를 복사합니다.")
         self.btn_copy_chart.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_copy_chart.clicked.connect(self.on_copy_chart_image)
         action_header.addWidget(self.btn_copy_chart)
 
-        btn_copy_plain = QPushButton("📄 텍스트 복사")
+        # 정비구역 위치도/지적 약도 복사 버튼 (스카이 블루)
+        self.btn_copy_zone_map = QPushButton("🗺️ 구역 지도 복사")
+        self.btn_copy_zone_map.setObjectName("ZoneMapCopyButton")
+        self.btn_copy_zone_map.setToolTip("해당 재개발 구역/매물 위치도 이미지를 복사하여 에디터에 사진으로 첨부합니다.")
+        self.btn_copy_zone_map.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_copy_zone_map.clicked.connect(self.on_copy_zone_map)
+        action_header.addWidget(self.btn_copy_zone_map)
+
+        # 국토교통부 토지이음 공식 지도 뷰어 바로가기 버튼 (청록색)
+        self.btn_open_eum = QPushButton("🌐 토지이음")
+        self.btn_open_eum.setObjectName("EumOpenButton")
+        self.btn_open_eum.setToolTip("국토교통부 '토지이음(eum.go.kr)' 공식 정비구역 지도를 웹브라우저로 바로 엽니다.")
+        self.btn_open_eum.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_open_eum.clicked.connect(self.on_open_eum)
+        action_header.addWidget(self.btn_open_eum)
+
+        btn_copy_plain = QPushButton("📄 텍스트")
         btn_copy_plain.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_copy_plain.clicked.connect(self.on_copy_plain_text)
         action_header.addWidget(btn_copy_plain)
@@ -1362,3 +1381,57 @@ class MainWindow(QMainWindow):
             return
         QApplication.clipboard().setText(tags_text)
         QMessageBox.information(self, "복사 완료", "해시태그가 클립보드에 복사되었습니다.")
+
+    def _get_current_zone_or_location(self) -> str:
+        """현재 입력 모드나 본문에서 구역명 또는 소재지 위치 추출"""
+        mode_idx = self.stacked_input.currentIndex()
+        if mode_idx == 0:
+            loc = self.edit_prop_location.text().strip()
+            if loc:
+                return loc
+        elif mode_idx == 1:
+            topic = self.edit_news_topic.text().strip()
+            if topic:
+                m = re.search(r"([가-힣a-zA-Z0-9·]+\s*\d+\s*구역|[가-힣a-zA-Z0-9·]+동)", topic)
+                if m:
+                    return m.group(1).strip()
+                return topic[:20]
+        elif mode_idx == 2:
+            topic = self.edit_file_topic.text().strip()
+            if topic:
+                return topic[:20]
+
+        title = self.combo_titles.currentText()
+        m = re.search(r"([가-힣a-zA-Z0-9·]+\s*\d+\s*구역)", title)
+        if m:
+            return m.group(1).strip()
+
+        return "도마변동5구역"
+
+    def on_copy_zone_map(self):
+        """정비구역 위치도/지적 약도 이미지를 생성하여 클립보드에 복사"""
+        zone_query = self._get_current_zone_or_location()
+        office_name = self.config.get("office_name", "").strip() or "신우 공인중개사사무소"
+
+        img = generate_zone_map_image(zone_query, office_name=office_name)
+        if copy_zone_map_to_clipboard(img):
+            QMessageBox.information(
+                self,
+                "구역 지도 복사 완료! 🗺️",
+                f"[{zone_query}] 정비구역 위치도 이미지가 클립보드에 복사되었습니다!\n\n"
+                "네이버 블로그 스마트에디터에서 지도를 넣고 싶은 위치에 커서를 두고 [Ctrl + V]를 누르시면 고해상도 구역 지도가 사진으로 바로 첨부됩니다."
+            )
+        else:
+            QMessageBox.warning(self, "오류", "구역 지도 이미지를 생성하지 못했습니다.")
+
+    def on_open_eum(self):
+        """국토교통부 토지이음(eum.go.kr) 공식 정비구역 지도 뷰어 팝업 오픈"""
+        zone_query = self._get_current_zone_or_location()
+        open_eum_viewer(zone_query)
+        QMessageBox.information(
+            self,
+            "토지이음 공식 지도 연결 🌐",
+            f"국토교통부 '토지이음(eum.go.kr)' 공식 정비구역 지도 뷰어가 웹브라우저로 열렸습니다!\n\n"
+            f"※ 검색어 '{zone_query}'가 클립보드에 자동 복사되었으니, 토지이음 검색창에서 [Ctrl + V] 로 붙여넣어 해당 구역의 법정 정비구역선(빨간선)을 바로 확인하실 수 있습니다."
+        )
+

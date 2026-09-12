@@ -245,6 +245,44 @@ QPushButton#ChartCopyButton:pressed {
     background-color: #1E40AF;
 }
 
+/* 정비구역 지도 복사 버튼 (스카이 블루) */
+QPushButton#ZoneMapCopyButton {
+    background-color: #0284C7;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton#ZoneMapCopyButton:hover {
+    background-color: #0369A1;
+}
+
+QPushButton#ZoneMapCopyButton:pressed {
+    background-color: #075985;
+}
+
+/* 토지이음 바로가기 버튼 (틸/청록) */
+QPushButton#EumOpenButton {
+    background-color: #0D9488;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 13px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton#EumOpenButton:hover {
+    background-color: #0F766E;
+}
+
+QPushButton#EumOpenButton:pressed {
+    background-color: #115E59;
+}
+
 /* 라디오 버튼 (카드형 톤앤매너 선택용) */
 QRadioButton {
     font-size: 15px;
@@ -322,7 +360,7 @@ QListWidget#PhotoList::item:selected {
 _PLACEHOLDER_RULES = [
     (("추천 스티커:", "추천스티커:", "스티커:"), "sticker-box", "✨", "[네이버 스티커]"),
     (("추천 자료:", "추천자료:", "추천 표:", "추천표:", "추천 차트:", "추천차트:", "자료:", "추천 그래프:", "추천그래프:"), "data-box", "📊", "[자료/그래프]"),
-    (("네이버 지도", "지도 첨부", "추천 지도", "지도:", "네이버지도"), "map-box", "🗺️", "[네이버 지도 첨부]"),
+    (("네이버 지도", "지도 첨부", "추천 지도", "지도:", "네이버지도", "구역 지도", "구역지도", "정비구역 지도", "위치도", "토지이음"), "map-box", "🗺️", "[지도/위치도 첨부]"),
     (("추천 배너:", "추천배너:", "명함 배너:", "상담 배너:"), "banner-box", "📞", "[사무소 명함/상담 배너]"),
 ]
 
