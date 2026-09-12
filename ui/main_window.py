@@ -30,7 +30,7 @@ from prompts.blog_templates import TONE_PRESETS
 from services.chart_service import extract_summary_items, render_infographic_card, copy_chart_to_clipboard
 from services.gemini_service import GeminiBlogService
 from services.news_search_service import fetch_yonhap_realestate_news
-from services.zone_map_service import generate_zone_map_image, copy_zone_map_to_clipboard, open_eum_viewer, KNOWN_ZONES
+from services.zone_map_service import generate_zone_map_image, copy_zone_map_to_clipboard, open_eum_viewer, KNOWN_ZONES, get_zone_data
 from ui.styles import MAIN_STYLESHEET, generate_blog_preview_html
 
 DEFAULT_MODEL_NAME = "gemini-3.6-flash"
@@ -282,6 +282,7 @@ class MainWindow(QMainWindow):
         self.yonhap_thread = None
         self._current_chart_img = None
         self._current_zone_map_img = None
+        self._current_dashboard_data = None
 
         self.init_window()
         self.init_ui()
@@ -1209,6 +1210,9 @@ class MainWindow(QMainWindow):
         # 3. 해시태그 반영
         self.edit_tags.setText(" ".join(result["tags"]))
 
+        # 3.5. AI가 실시간 자동 수집/추출한 인포그래픽 핵심 지표 데이터 보관
+        self._current_dashboard_data = result.get("dashboard_data")
+
         # 4. 차트 및 구역 지도 비주얼 생성 및 바인딩
         self.generate_preview_visuals(force_refresh=True)
 
@@ -1262,12 +1266,30 @@ class MainWindow(QMainWindow):
         )
 
     def _create_current_chart(self) -> QImage:
-        """현재 본문 기반 인포그래픽 차트 이미지 생성"""
+        """현재 본문 및 AI 자동 수집 지표 기반 인포그래픽 대시보드 이미지 생성"""
         body_text = self.edit_body.toPlainText().strip()
         if not body_text:
             return None
         current_title = self.combo_titles.currentText().replace("📌 ", "").strip() or "부동산 핵심 체크포인트"
         office_name = self.config.get("office_name", "").strip() or "신우 공인중개사사무소"
+
+        # 1. AI가 포스팅 생성 시 실시간 자동 수집/추출한 핵심 대시보드 데이터 최우선 활용
+        if self._current_dashboard_data:
+            zone_data = dict(self._current_dashboard_data)
+            zone_name = zone_data.get("target_name") or self._get_current_zone_or_location()
+            category_label = zone_data.get("category", "부동산 핵심 지표 분석")
+            return render_infographic_card(
+                current_title,
+                items=[],
+                office_name=office_name,
+                card_category=category_label,
+                zone_name=zone_name,
+                zone_data=zone_data
+            )
+
+        # 2. AI 데이터가 없는 경우 (직접 텍스트 편집 또는 내장 DB 매칭)
+        zone_query = self._get_current_zone_or_location()
+        zone_data = get_zone_data(zone_query) if zone_query else None
 
         mode = "property" if self.stacked_input.currentIndex() == 0 else "news"
         prop_info = None
@@ -1283,7 +1305,15 @@ class MainWindow(QMainWindow):
 
         items = extract_summary_items(body_text, mode=mode, property_info=prop_info)
         category_label = "매물 핵심 Check Point" if mode == "property" else "부동산 정책/이슈 핵심 요약"
-        return render_infographic_card(current_title, items, office_name=office_name, card_category=category_label)
+        return render_infographic_card(
+            current_title,
+            items=items,
+            office_name=office_name,
+            card_category=category_label,
+            zone_name=zone_query,
+            zone_data=zone_data,
+            property_info=prop_info
+        )
 
     def _create_current_zone_map(self) -> QImage:
         """현재 구역/소재지 기반 정비구역 위치도 이미지 생성"""

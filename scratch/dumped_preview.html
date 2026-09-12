@@ -1,0 +1,167 @@
+
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", "NanumSquare", sans-serif;
+            background-color: #FFFFFF;
+            color: #222222;
+            line-height: 1.85;
+            padding: 30px 40px;
+            margin: 0;
+            font-size: 15px;
+            letter-spacing: -0.3px;
+        }
+        .blog-container {
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        .blog-header {
+            border-bottom: 2px solid #03C75A;
+            padding-bottom: 18px;
+            margin-bottom: 30px;
+        }
+        .blog-category {
+            font-size: 13px;
+            font-weight: 700;
+            color: #03C75A;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+        .blog-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: #111111;
+            line-height: 1.4;
+            margin: 0;
+        }
+        .blog-content {
+            font-size: 15px;
+            color: #333333;
+        }
+        .blog-content p {
+            margin-bottom: 20px;
+            word-break: keep-all;
+        }
+        .blog-content h1, .blog-content h2, .blog-content h3 {
+            color: #111111;
+            margin-top: 32px;
+            margin-bottom: 16px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+        .blog-content h3 {
+            font-size: 18px;
+            border-left: 4px solid #03C75A;
+            padding-left: 10px;
+        }
+        .blog-content strong {
+            color: #111111;
+            background: linear-gradient(to top, #DCFCE7 40%, transparent 40%);
+            padding: 0 2px;
+        }
+        /* 표(Table) 스타일 - 네이버 블로그 스마트에디터풍 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #E2E8F0;
+            padding: 10px 14px;
+            text-align: left;
+        }
+        th {
+            background-color: #F1F5F9;
+            font-weight: bold;
+            color: #1E293B;
+            width: 25%;
+        }
+        td {
+            background-color: #FFFFFF;
+            color: #334155;
+        }
+        /* 리스트 스타일 */
+        ul, ol {
+            padding-left: 24px;
+            margin-bottom: 20px;
+        }
+        li {
+            margin-bottom: 6px;
+        }
+        /* 플레이스홀더 박스 */
+        .placeholder-box {
+            margin: 22px 0;
+            padding: 14px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            line-height: 1.5;
+        }
+        .placeholder-box .icon {
+            font-size: 18px;
+            margin-right: 10px;
+        }
+        .sticker-box {
+            background-color: #FEF3C7;
+            border: 1px dashed #F59E0B;
+            color: #92400E;
+        }
+        .photo-box {
+            background-color: #EFF6FF;
+            border: 1.5px dashed #3B82F6;
+            color: #1E40AF;
+        }
+        .data-box {
+            background-color: #F3E8FF;
+            border: 1px dashed #A855F7;
+            color: #6B21A8;
+        }
+        .map-box {
+            background-color: #E0F2FE;
+            border: 1.5px dashed #0284C7;
+            color: #0369A1;
+        }
+        .banner-box {
+            background-color: #ECFDF5;
+            border: 1.5px solid #059669;
+            color: #065F46;
+        }
+        .blog-tags {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #E5E7EB;
+        }
+        .tag-badge {
+            display: inline-block;
+            background-color: #F3F4F6;
+            color: #4B5563;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border-radius: 16px;
+            margin-right: 6px;
+            margin-bottom: 8px;
+        }
+    </style>
+    </head>
+    <body>
+    <div class="blog-container">
+        <div class="blog-header">
+            <div class="blog-category">부동산 소식 & 매물 브리핑</div>
+            <h1 class="blog-title">Title</h1>
+        </div>
+        <div class="blog-content">
+            <div class="visual-card-box chart-visual" style="margin: 12px 0; text-align: center; background: #F8FAFC; border: 1.5px solid #BFDBFE; border-radius: 12px; padding: 10px;"><div style="font-size: 13px; font-weight: 700; color: #1D4ED8; margin-bottom: 8px; text-align: left;">📊 <strong>[핵심 요약 인포그래픽 카드]</strong> - 도마변동 5구역 핵심 사업 요약표</div><img src="chart_preview.png" width="620" height="400" style="display: block; margin: 0 auto; border-radius: 8px; border: 1px solid #CBD5E1;"><div style="font-size: 12px; color: #64748B; margin-top: 6px; text-align: center;">💡 상단 <strong>[📊 차트 복사]</strong> 버튼을 누르면 이 고화질 카드가 클립보드에 복사되어 블로그에 바로 첨부됩니다.</div></div><div class="visual-card-box map-visual" style="margin: 12px 0; text-align: center; background: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 12px; padding: 10px;"><div style="font-size: 13px; font-weight: 700; color: #0284C7; margin-bottom: 8px; text-align: left;">🗺️ <strong>[정비구역 / 매물 위치도]</strong> - 현장 및 주변 정비구역 위치도</div><img src="zone_map_preview.png" width="620" height="400" style="display: block; margin: 0 auto; border-radius: 8px; border: 1px solid #CBD5E1;"><div style="font-size: 12px; color: #64748B; margin-top: 6px; text-align: center;">💡 상단 <strong>[🗺️ 구역 지도 복사]</strong> 버튼을 누르면 이 고화질 위치도가 클립보드에 복사되어 블로그에 바로 첨부됩니다.</div></div>
+        </div>
+        <div class="blog-tags">
+            
+        </div>
+    </div>
+    </body>
+    </html>
+    

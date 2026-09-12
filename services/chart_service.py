@@ -13,6 +13,7 @@ from PyQt6.QtGui import (
     QBrush,
     QColor,
     QFont,
+    QFontMetrics,
     QImage,
     QLinearGradient,
     QPainter,
@@ -135,102 +136,322 @@ def extract_summary_items(body_text: str, mode: str = "news", property_info: dic
     return items[:5]
 
 
+def _draw_fitted_title(p: QPainter, rect: QRectF, title: str, max_size: int = 13, min_size: int = 9, color: QColor = QColor("#FFFFFF")):
+    """인포그래픽 배너 타이틀이 잘리거나 '...'로 생략되지 않도록 가용 너비에 맞춰 폰트 크기 자동 조절"""
+    p.setPen(color)
+    clean_title = title.replace("📌 ", "").strip()
+    fitted_font = None
+    for size in range(max_size, min_size - 1, -1):
+        font = QFont(FONT_FAMILY, size, QFont.Weight.Bold)
+        fm = QFontMetrics(font)
+        if fm.horizontalAdvance(clean_title) <= rect.width():
+            fitted_font = font
+            break
+
+    if fitted_font:
+        p.setFont(fitted_font)
+        p.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, clean_title)
+    else:
+        font = QFont(FONT_FAMILY, min_size, QFont.Weight.Bold)
+        p.setFont(font)
+        p.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap, clean_title)
+
+
+def _draw_fitted_metric_value(p: QPainter, rect: QRectF, val: str, color: QColor = QColor("#0F172A")):
+    """지표 수치/내용이 잘리지 않고 온전히 표시되도록 폰트 자동 조절 및 줄바꿈 지원"""
+    p.setPen(color)
+    clean_val = str(val).strip()
+
+    fitted_font = None
+    for size in [12, 11, 10]:
+        font = QFont(FONT_FAMILY, size, QFont.Weight.Bold)
+        fm = QFontMetrics(font)
+        if fm.horizontalAdvance(clean_val) <= rect.width():
+            fitted_font = font
+            break
+
+    if fitted_font:
+        p.setFont(fitted_font)
+        p.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, clean_val)
+    else:
+        p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+        p.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap, clean_val)
+
+
+def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_name: str, zone_data: dict, office_name: str):
+    """정비사업 구역 데이터 자동 수집 대시보드 (진행률 로드맵 + 4대 지표)"""
+    card_rect = QRectF(2, 2, width - 4, height - 4)
+    p.setBrush(QColor("#F8FAFC"))
+    p.setPen(QPen(QColor("#CBD5E1"), 1.2))
+    p.drawRoundedRect(card_rect, 12, 12)
+
+    banner_rect = QRectF(12, 12, width - 24, 68)
+    p.setBrush(QColor("#1E3A8A"))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.drawRoundedRect(banner_rect, 8, 8)
+
+    cat_title = zone_data.get("category")
+    if not cat_title:
+        cat_title = f"정비사업 핵심 지표 대시보드 | {zone_name}" if zone_name else "부동산 핵심 분석 대시보드"
+    elif zone_name and zone_name not in cat_title:
+        cat_title = f"{cat_title} | {zone_name}"
+
+    p.setPen(QColor("#93C5FD"))
+    p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"📊 {cat_title}")
+
+    _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
+
+    step_y = 88
+    p.setPen(QColor("#334155"))
+    p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+    step_label = "🚀 사업 추진 단계 로드맵" if "정비" in cat_title or "재개발" in cat_title or "재건축" in cat_title else "🎯 정책 시행 및 추진 로드맵"
+    p.drawText(QRectF(14, step_y, width - 28, 18), Qt.AlignmentFlag.AlignLeft, step_label)
+
+    bar_y = step_y + 22
+    bar_rect = QRectF(14, bar_y, width - 28, 24)
+    p.setBrush(QColor("#E2E8F0"))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.drawRoundedRect(bar_rect, 12, 12)
+
+    progress_val = zone_data.get("progress", 70)
+    stage_text = zone_data.get("stage", "사업시행인가 완료")
+    fill_w = max(90.0, (width - 28) * (progress_val / 100.0))
+    fill_rect = QRectF(14, bar_y, fill_w, 24)
+    fill_grad = QLinearGradient(14, bar_y, 14 + fill_w, bar_y)
+    fill_grad.setColorAt(0.0, QColor("#2563EB"))
+    fill_grad.setColorAt(1.0, QColor("#059669"))
+    p.setBrush(QBrush(fill_grad))
+    p.drawRoundedRect(fill_rect, 12, 12)
+
+    p.setPen(QColor("#FFFFFF"))
+    p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+    p.drawText(fill_rect, Qt.AlignmentFlag.AlignCenter, f"현재 진행률: {progress_val}% ({stage_text})")
+
+    grid_y = 144
+    box_w = (width - 36) / 2
+    box_h = 94
+
+    custom_metrics = zone_data.get("metrics")
+    if custom_metrics and len(custom_metrics) >= 4:
+        icons = ["🏢", "🏗️", "📌", "📍"]
+        colors = [
+            ("#1D4ED8", "#EFF6FF", "#BFDBFE"),
+            ("#047857", "#ECFDF5", "#A7F3D0"),
+            ("#7C3AED", "#F5F3FF", "#DDD6FE"),
+            ("#B45309", "#FFFBEB", "#FDE68A"),
+        ]
+        metrics = []
+        for i in range(4):
+            lbl, val = custom_metrics[i]
+            prefix = icons[i] if not any(lbl.startswith(ic) for ic in ["🏢", "🏗️", "📌", "📍", "🏷️", "💰", "📐", "🌟", "📊", "🚀", "⚡", "👉"]) else ""
+            display_lbl = f"{prefix} {lbl}".strip()
+            metrics.append((display_lbl, val, colors[i][0], colors[i][1], colors[i][2]))
+    else:
+        metrics = [
+            ("🏢 총 세대수", zone_data.get("units", "약 2,870세대"), "#1D4ED8", "#EFF6FF", "#BFDBFE"),
+            ("🏗️ 시공 브랜드", zone_data.get("builder", "현대건설 & GS건설"), "#047857", "#ECFDF5", "#A7F3D0"),
+            ("📌 추진 현황", stage_text, "#7C3AED", "#F5F3FF", "#DDD6FE"),
+            ("📍 건축 규모", zone_data.get("scale", "지하 2층 ~ 지상 38층"), "#B45309", "#FFFBEB", "#FDE68A"),
+        ]
+
+    for idx, (label, val, text_color, bg_color, border_color) in enumerate(metrics):
+        r = idx // 2
+        c = idx % 2
+        bx = 14 + c * (box_w + 8)
+        by = grid_y + r * (box_h + 8)
+        b_rect = QRectF(bx, by, box_w, box_h)
+
+        p.setBrush(QColor(bg_color))
+        p.setPen(QPen(QColor(border_color), 1.2))
+        p.drawRoundedRect(b_rect, 8, 8)
+
+        p.setPen(QColor(text_color))
+        p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+        p.drawText(QRectF(bx + 10, by + 8, box_w - 20, 20), Qt.AlignmentFlag.AlignLeft, label)
+
+        _draw_fitted_metric_value(p, QRectF(bx + 10, by + 30, box_w - 20, 54), val)
+
+    footer_rect = QRectF(14, height - 30, width - 28, 20)
+    p.setPen(QColor("#64748B"))
+    p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
+    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"🏢 {office_name} | 네이버 블로그 공식 포스팅 요약 차트")
+
+
+def _draw_property_dashboard(p: QPainter, width: int, height: int, title: str, prop_info: dict, office_name: str):
+    """매물 핵심 지표 2x2 대시보드 + 특장점 하이라이트"""
+    card_rect = QRectF(2, 2, width - 4, height - 4)
+    p.setBrush(QColor("#F8FAFC"))
+    p.setPen(QPen(QColor("#CBD5E1"), 1.2))
+    p.drawRoundedRect(card_rect, 12, 12)
+
+    banner_rect = QRectF(12, 12, width - 24, 68)
+    p.setBrush(QColor("#0F766E"))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.drawRoundedRect(banner_rect, 8, 8)
+
+    p.setPen(QColor("#99F6E4"))
+    p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"🏠 공인중개사 추천 매물 브리핑 | {office_name}")
+
+    _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
+
+    grid_y = 90
+    box_w = (width - 36) / 2
+    box_h = 92
+
+    deal_type = prop_info.get("deal_type", "매매")
+    prop_type = prop_info.get("property_type", "아파트")
+    metrics = [
+        ("🏷️ 매물 구분", f"{prop_type} ({deal_type})", "#0D9488", "#F0FDFA", "#99F6E4"),
+        ("💰 가격 조건", prop_info.get("price", "협의 가능"), "#DC2626", "#FEF2F2", "#FECACA"),
+        ("📐 면적 및 구조", prop_info.get("area_structure", "상세 문의"), "#2563EB", "#EFF6FF", "#BFDBFE"),
+        ("📍 소재지 위치", prop_info.get("location", "대전 서구"), "#7C3AED", "#F5F3FF", "#DDD6FE"),
+    ]
+
+    for idx, (label, val, text_color, bg_color, border_color) in enumerate(metrics):
+        r = idx // 2
+        c = idx % 2
+        bx = 14 + c * (box_w + 8)
+        by = grid_y + r * (box_h + 8)
+        b_rect = QRectF(bx, by, box_w, box_h)
+
+        p.setBrush(QColor(bg_color))
+        p.setPen(QPen(QColor(border_color), 1.2))
+        p.drawRoundedRect(b_rect, 8, 8)
+
+        p.setPen(QColor(text_color))
+        p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+        p.drawText(QRectF(bx + 10, by + 8, box_w - 20, 20), Qt.AlignmentFlag.AlignLeft, label)
+
+        _draw_fitted_metric_value(p, QRectF(bx + 10, by + 30, box_w - 20, 52), val)
+
+    feat = prop_info.get("features", "")
+    if feat:
+        feat_rect = QRectF(14, 298, width - 28, 56)
+        p.setBrush(QColor("#FEF3C7"))
+        p.setPen(QPen(QColor("#FDE68A"), 1.2))
+        p.drawRoundedRect(feat_rect, 8, 8)
+
+        p.setPen(QColor("#B45309"))
+        p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+        p.drawText(QRectF(24, 304, width - 48, 18), Qt.AlignmentFlag.AlignLeft, "🌟 매물 특장점 & 프리미엄 포인트")
+
+        _draw_fitted_title(p, QRectF(24, 324, width - 48, 24), feat, max_size=11, min_size=9, color=QColor("#1E293B"))
+
+    footer_rect = QRectF(14, height - 30, width - 28, 20)
+    p.setPen(QColor("#64748B"))
+    p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
+    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"🏢 {office_name} | 네이버 블로그 공식 포스팅 요약 차트")
+
+
+def _draw_generic_dashboard(p: QPainter, width: int, height: int, title: str, items: list, office_name: str, card_category: str):
+    """일반 뉴스/분석 2x2 그리드 대시보드"""
+    card_rect = QRectF(2, 2, width - 4, height - 4)
+    p.setBrush(QColor("#F8FAFC"))
+    p.setPen(QPen(QColor("#CBD5E1"), 1.2))
+    p.drawRoundedRect(card_rect, 12, 12)
+
+    banner_rect = QRectF(12, 12, width - 24, 68)
+    p.setBrush(QColor("#1E3A8A"))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.drawRoundedRect(banner_rect, 8, 8)
+
+    p.setPen(QColor("#93C5FD"))
+    p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"📊 {card_category.upper()}")
+
+    _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
+
+    grid_y = 92
+    box_w = (width - 36) / 2
+    box_h = 126
+
+    content_items = (items[:4] if items else []) + [("체크 포인트", "상세 분석 내용")] * 4
+    content_items = content_items[:4]
+
+    colors = [
+        ("#1D4ED8", "#EFF6FF", "#BFDBFE", "1"),
+        ("#047857", "#ECFDF5", "#A7F3D0", "2"),
+        ("#7C3AED", "#F5F3FF", "#DDD6FE", "3"),
+        ("#B45309", "#FFFBEB", "#FDE68A", "4"),
+    ]
+
+    for idx, (key, val) in enumerate(content_items):
+        r = idx // 2
+        c = idx % 2
+        bx = 14 + c * (box_w + 8)
+        by = grid_y + r * (box_h + 8)
+        b_rect = QRectF(bx, by, box_w, box_h)
+
+        t_col, bg_col, brd_col, num_str = colors[idx]
+
+        p.setBrush(QColor(bg_col))
+        p.setPen(QPen(QColor(brd_col), 1.2))
+        p.drawRoundedRect(b_rect, 8, 8)
+
+        # 넘버링 뱃지
+        badge_rect = QRectF(bx + 10, by + 10, 22, 22)
+        p.setBrush(QColor(t_col))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(badge_rect, 4, 4)
+        p.setPen(QColor("#FFFFFF"))
+        p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Bold))
+        p.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, num_str)
+
+        # 항목명
+        p.setPen(QColor(t_col))
+        p.setFont(QFont(FONT_FAMILY, 11, QFont.Weight.Bold))
+        p.drawText(QRectF(bx + 38, by + 10, box_w - 48, 22), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, key)
+
+        # 구분 라인
+        p.setPen(QPen(QColor(brd_col), 1))
+        p.drawLine(int(bx + 10), int(by + 36), int(bx + box_w - 10), int(by + 36))
+
+        # 내용
+        p.setPen(QColor("#1E293B"))
+        p.setFont(QFont(FONT_FAMILY, 11, QFont.Weight.DemiBold))
+        p.drawText(QRectF(bx + 10, by + 42, box_w - 20, 74), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, val)
+
+    footer_rect = QRectF(14, height - 30, width - 28, 20)
+    p.setPen(QColor("#64748B"))
+    p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
+    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"🏢 {office_name} | 네이버 블로그 공식 포스팅 요약 차트")
+
+
 def render_infographic_card(
     title: str,
-    items: list,
+    items: list = None,
     office_name: str = "신우 공인중개사사무소",
-    card_category: str = "부동산 핵심 체크포인트"
+    card_category: str = "부동산 핵심 체크포인트",
+    zone_name: str = "",
+    zone_data: dict = None,
+    property_info: dict = None
 ) -> QImage:
     """
-    네이버 블로그 본문 첨부용 고해상도 카드 인포그래픽 이미지(960x540, 16:9) 생성
+    네이버 블로그 본문 1:1 최적화(620x400) 고해상도 대시보드 인포그래픽 카드 생성
+    - 정비구역 데이터(세대수, 시공사, 단계, 공정률 바) 자동 수집 시각화
+    - 매물 정보(가격, 면적, 특장점) 4대 지표 카드 시각화
+    - 불필요한 하단 여백 완전 제거 (1:1 픽셀 매칭)
     """
-    content_items = items if items else [("핵심 내용", "상세 분석 결과")]
-    row_count = len(content_items)
-    row_h = 60
-    row_gap = 10
-    start_y = 135
-
-    width = 960
-    # 내용물 항목 개수에 꼭 맞게 전체 캔버스 높이 동적 최적화 (하단 여백 낭비 원천 차단)
-    height = max(300, start_y + row_count * (row_h + row_gap) + 45)
+    width = 620
+    height = 400
 
     img = QImage(width, height, QImage.Format.Format_ARGB32)
-    img.fill(QColor("#00000000"))
+    img.fill(QColor("#FFFFFF"))
 
     p = QPainter(img)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
 
-    # 1. 배경 전체 둥근 카드 (소프트 블루 그라데이션)
-    card_rect = QRectF(12, 12, width - 24, height - 24)
-    bg_grad = QLinearGradient(0, 0, width, height)
-    bg_grad.setColorAt(0.0, QColor("#F8FAFC"))
-    bg_grad.setColorAt(1.0, QColor("#EEF2F6"))
-
-    p.setBrush(QBrush(bg_grad))
-    p.setPen(QPen(QColor("#CBD5E1"), 1.5))
-    p.drawRoundedRect(card_rect, 18, 18)
-
-    # 2. 상단 헤더 배너 카드
-    banner_rect = QRectF(28, 28, width - 56, 92)
-    p.setBrush(QColor("#1E3A8A"))
-    p.setPen(Qt.PenStyle.NoPen)
-    p.drawRoundedRect(banner_rect, 12, 12)
-
-    # 상단 카테고리 뱃지
-    p.setPen(QColor("#93C5FD"))
-    p.setFont(QFont(FONT_FAMILY, 11, QFont.Weight.Bold))
-    p.drawText(QRectF(48, 38, width - 96, 22), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, f"📊 {card_category.upper()}")
-
-    # 상단 메인 타이틀
-    p.setPen(QColor("#FFFFFF"))
-    p.setFont(QFont(FONT_FAMILY, 16, QFont.Weight.Bold))
     clean_title = title.replace("📌 ", "").strip()
-    if len(clean_title) > 36:
-        clean_title = clean_title[:35] + "..."
-    p.drawText(QRectF(48, 64, width - 96, 46), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, clean_title)
 
-    # 3. 본문 항목 리스트 박스들
-    for i, (key, val) in enumerate(content_items):
-        y_pos = start_y + i * (row_h + row_gap)
-        item_rect = QRectF(28, y_pos, width - 56, row_h)
-
-        p.setBrush(QColor("#FFFFFF"))
-        p.setPen(QPen(QColor("#E2E8F0"), 1))
-        p.drawRoundedRect(item_rect, 8, 8)
-
-        # 좌측 넘버링 뱃지
-        badge_rect = QRectF(42, y_pos + (row_h - 28) / 2, 28, 28)
-        p.setBrush(QColor("#2563EB"))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.drawRoundedRect(badge_rect, 6, 6)
-
-        p.setPen(QColor("#FFFFFF"))
-        p.setFont(QFont(FONT_FAMILY, 11, QFont.Weight.Bold))
-        p.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, str(i + 1))
-
-        # 항목 레이블 (Key)
-        p.setPen(QColor("#1E293B"))
-        p.setFont(QFont(FONT_FAMILY, 13, QFont.Weight.Bold))
-        key_rect = QRectF(80, y_pos + 4, 180, row_h - 8)
-        p.drawText(key_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, key)
-
-        # 구분 바
-        p.setPen(QPen(QColor("#E2E8F0"), 1))
-        p.drawLine(int(265), int(y_pos + 8), int(265), int(y_pos + row_h - 8))
-
-        # 항목 값 (Value)
-        p.setPen(QColor("#334155"))
-        p.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.DemiBold))
-        val_rect = QRectF(280, y_pos + 4, width - 330, row_h - 8)
-        p.drawText(val_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, val)
-
-    # 4. 하단 브랜딩 푸터
-    footer_rect = QRectF(32, height - 38, width - 64, 24)
-    p.setPen(QColor("#64748B"))
-    p.setFont(QFont(FONT_FAMILY, 11, QFont.Weight.Normal))
-    footer_text = f"🏢 {office_name} | 네이버 블로그 공식 포스팅 인포그래픽 자료"
-    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, footer_text)
+    if zone_data:
+        _draw_zone_dashboard(p, width, height, clean_title, zone_name or "정비사업지", zone_data, office_name)
+    elif property_info and any(property_info.values()):
+        _draw_property_dashboard(p, width, height, clean_title, property_info, office_name)
+    else:
+        _draw_generic_dashboard(p, width, height, clean_title, items or [], office_name, card_category)
 
     p.end()
     return img

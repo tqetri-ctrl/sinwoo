@@ -15,6 +15,8 @@ SUPPORTED_MODELS = [
 ]
 SECTION_TITLES = "[제목 후보]"
 SECTION_BODY = "[블로그 본문]"
+SECTION_DASHBOARD = "[인포그래픽 핵심 데이터]"
+SECTION_MAP_DATA = "[지도 시각화 데이터]"
 SECTION_TAGS = "[네이버 블로그 추천 태그]"
 DEFAULT_FALLBACK_TITLE = "공인중개사가 전하는 부동산 핵심 소식과 현황 브리핑"
 DEFAULT_FALLBACK_TAGS = ["#부동산", "#공인중개사", "#부동산소식", "#부동산현황", "#부동산정보"]
@@ -42,79 +44,67 @@ def _format_office_info(config: dict) -> str:
         ("office_location", "- 사무소 위치/주소: "),
         ("custom_signature", "- 추가 서명/안내 문구: "),
     ]
-    parts = [f"{prefix}{config[key]}" for key, prefix in field_map if config.get(key)]
+    lines = ["포스팅 마지막 맺음말 직후에 아래 공인중개사 사무소 정보를 단정하고 신뢰감 있게 삽입하세요:"]
+    for key, prefix in field_map:
+        val = config.get(key, "").strip()
+        if val:
+            lines.append(f"{prefix}{val}")
 
-    if not parts:
-        return "포스팅 마지막 맺음말에 독자의 공감과 댓글/이웃 추가를 유도하는 따뜻한 마무리 인사를 작성하세요."
-
-    return "포스팅 마지막 맺음말 부분에 아래의 공인중개사 정보를 신뢰감 있고 친절하게 안내하며 독자의 상담/방문 예약을 유도하세요:\n" + "\n".join(parts)
+    lines.append("- (안내) 네이버 지도 플레이스 등록 안내 및 상담 환영 문구를 덧붙이세요.")
+    return "\n".join(lines)
 
 
 def _format_freshness_instruction(config: dict) -> str:
-    """블로그 글의 최신성 유지를 위한 작성 기준일 및 과거 자료 배제 원칙 반환"""
+    """최신성 및 연도 왜곡 방지 프롬프트 구성"""
     now = datetime.now()
     current_date_str = now.strftime(DATE_FORMAT_KOREAN)
     current_year = now.year
-    past_years_str = f"{current_year - 2}년, {current_year - 1}년"
-    include_source_date = config.get("include_source_date", True) if config else True
+    past_year = current_year - 1
+    two_years_ago = current_year - 2
 
-    date_citation_rule = (
-        f"\n- **발표 시점/출처 명시**: 독자가 최신 정보임을 바로 신뢰할 수 있도록 본문에서 정책, 금리, 규제, 실거래 통계를 언급할 때 "
-        f"발표 시점(예: '{current_year}년 최근 발표', '{current_year}년 {now.month}월 기준' 등)을 자연스럽게 표기하세요."
-        if include_source_date else ""
-    )
-
-    return (
-        f"- **현재 작성 기준일**: 오늘은 **{current_date_str}**입니다. 블로그의 모든 내용과 시장 해설은 반드시 이 시점을 기준으로 최신 상태를 유지해야 합니다.\n"
-        f"- **오래된 과거 자료(1~2년 전 기사/통계 등) 절대 인용 금지**:\n"
-        f"  * 1~2년 전(예: {past_years_str} 등)의 지난 기사나 이미 개정/폐기된 구(舊) 정책·제도 규정을 현재의 최신 소식인 것처럼 작성하는 것을 엄격히 금지합니다.\n"
-        f"  * 인터넷 검색 결과나 참고 자료를 활용할 때 반드시 **기사의 발행 일자 및 정책 발표 시점**을 엄격하게 확인하세요.\n"
-        f"  * 가장 최근({current_year}년 최신 발표 및 최근 수주일~수개월 이내 보도)에 나온 확실한 팩트와 최신 실거래/시장 동향을 최우선으로 선별하여 반영하세요."
-        f"{date_citation_rule}"
-    )
+    return f"""- **현재 기준 시점**: 오늘은 **{current_date_str}**입니다.
+- **연도 기준 엄수**: 올해는 **{current_year}년**입니다.
+  * {current_year}년 현재 시행 중이거나 발표된 최신 부동산 정책, 대출 규제, 세법, 실거래가 정보를 최우선 기준으로 작성하세요.
+  * 과거({two_years_ago}년~{past_year}년 등)의 지난 대책이나 오래된 수치를 마치 올해 새로 발표된 것처럼 혼동하여 작성하지 마세요.
+  * 포스팅 작성일 기준 가장 최신 정보임을 독자가 신뢰할 수 있도록 현재 시점을 자연스럽게 명시하세요."""
 
 
 def _extract_titles(text: str) -> list:
-    """생성된 텍스트에서 제목 후보 리스트 추출"""
-    if SECTION_TITLES not in text:
-        return [DEFAULT_FALLBACK_TITLE]
-
-    part = text.split(SECTION_TITLES, 1)[1]
-    if SECTION_BODY in part:
-        part = part.split(SECTION_BODY, 1)[0]
-
+    """생성된 텍스트에서 제목 후보 3개 추출"""
     titles = []
-    for raw_line in part.strip().splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        cleaned = re.sub(r'^\d+[\.\)\s\-]+', '', line).replace('**', '').replace('"', '').strip()
-        if cleaned:
-            titles.append(cleaned)
-
-    return titles or [DEFAULT_FALLBACK_TITLE]
+    if SECTION_TITLES in text:
+        after_titles = text.split(SECTION_TITLES, 1)[1]
+        for end_marker in [SECTION_BODY, SECTION_DASHBOARD, SECTION_MAP_DATA, SECTION_TAGS]:
+            if end_marker in after_titles:
+                after_titles = after_titles.split(end_marker, 1)[0]
+        for line in after_titles.strip().splitlines():
+            line = line.strip()
+            line = re.sub(r'^\d+[\.\)]\s*', '', line)
+            line = re.sub(r'^[-*•]\s*', '', line)
+            line = line.strip('"\' ')
+            if line and len(line) > 5:
+                titles.append(line)
+    return titles[:3] if titles else [DEFAULT_FALLBACK_TITLE]
 
 
 def _extract_tags(text: str) -> list:
-    """생성된 텍스트에서 추천 태그 추출"""
-    if SECTION_TAGS not in text:
-        return DEFAULT_FALLBACK_TAGS
-
-    block = text.split(SECTION_TAGS, 1)[1].strip()
-    found = re.findall(r'#([^\s#]+)', block)
-    if found:
-        return [f"#{t}" for t in found]
-
-    tags = [t.strip() for t in block.split() if t.strip()]
+    """생성된 텍스트에서 해시태그 목록 추출"""
+    tags = []
+    if SECTION_TAGS in text:
+        tag_part = text.split(SECTION_TAGS, 1)[1].strip()
+        tags = re.findall(r'#([^\s#]+)', tag_part)
+    if not tags:
+        tags = re.findall(r'#([^\s#]+)', text)
     return tags or DEFAULT_FALLBACK_TAGS
 
 
 def _extract_body(text: str) -> str:
-    """생성된 텍스트에서 본문 마크다운 추출"""
+    """생성된 텍스트에서 본문 마크다운 추출 (인포그래픽 데이터, 지도 데이터 및 태그 영역 제외)"""
     if SECTION_BODY in text:
         body_part = text.split(SECTION_BODY, 1)[1]
-        if SECTION_TAGS in body_part:
-            body_part = body_part.split(SECTION_TAGS, 1)[0]
+        for end_marker in [SECTION_DASHBOARD, SECTION_MAP_DATA, SECTION_TAGS]:
+            if end_marker in body_part:
+                body_part = body_part.split(end_marker, 1)[0]
         return body_part.strip()
 
     cleaned = text
@@ -122,7 +112,102 @@ def _extract_body(text: str) -> str:
         parts = cleaned.split(SECTION_TITLES, 1)
         if len(parts) > 1:
             cleaned = parts[1]
+    for end_marker in [SECTION_DASHBOARD, SECTION_MAP_DATA, SECTION_TAGS]:
+        if end_marker in cleaned:
+            cleaned = cleaned.split(end_marker, 1)[0]
     return cleaned.strip()
+
+
+def _extract_dashboard_data(text: str) -> dict:
+    """생성된 텍스트에서 AI가 자동 수집/분석한 인포그래픽 핵심 데이터 파싱"""
+    if SECTION_DASHBOARD not in text:
+        return None
+
+    part = text.split(SECTION_DASHBOARD, 1)[1]
+    for end_marker in [SECTION_MAP_DATA, SECTION_TAGS]:
+        if end_marker in part:
+            part = part.split(end_marker, 1)[0]
+
+    data = {
+        "category": "부동산 핵심 지표 분석",
+        "target_name": "",
+        "stage": "사업 추진 및 시행 중",
+        "progress": 70,
+        "metrics": []
+    }
+
+    for line in part.strip().splitlines():
+        line = line.strip().lstrip("-*• ")
+        if not line:
+            continue
+        if ":" in line:
+            k, v = line.split(":", 1)
+            k = k.strip()
+            v = v.strip()
+            if "분류" in k:
+                data["category"] = v
+            elif any(sub in k for sub in ["주제", "구역", "사업지", "대상", "단지", "매물"]):
+                data["target_name"] = v
+            elif any(sub in k for sub in ["단계", "현황"]):
+                data["stage"] = v
+            elif any(sub in k for sub in ["진행률", "공정률"]):
+                digits = re.findall(r'\d+', v)
+                if digits:
+                    data["progress"] = min(100, max(0, int(digits[0])))
+            elif "지표" in k or "항목" in k:
+                if "|" in v:
+                    m_label, m_val = v.split("|", 1)
+                    data["metrics"].append((m_label.strip(), m_val.strip()))
+                else:
+                    data["metrics"].append((k, v))
+
+    return data if data["metrics"] or data["target_name"] else None
+
+
+def _extract_map_data(text: str) -> dict:
+    """생성된 텍스트에서 AI가 분석한 지도 시각화 메타데이터 파싱"""
+    if SECTION_MAP_DATA not in text:
+        return None
+
+    part = text.split(SECTION_MAP_DATA, 1)[1]
+    if SECTION_TAGS in part:
+        part = part.split(SECTION_TAGS, 1)[0]
+
+    data = {
+        "need_map": True,
+        "map_query": "",
+        "map_title": "",
+        "map_desc": ""
+    }
+
+    for line in part.strip().splitlines():
+        line = line.strip().lstrip("-*• ")
+        if not line:
+            continue
+        if ":" in line:
+            k, v = line.split(":", 1)
+            k = k.strip()
+            v = v.strip()
+            if "지도생성" in k or "지도필요" in k:
+                val_upper = v.upper()
+                if val_upper.startswith("N") or "아니오" in v or "불필요" in v or "없음" in v:
+                    data["need_map"] = False
+                else:
+                    data["need_map"] = True
+            elif "검색어" in k or "위치" in k or "소재지" in k:
+                if v and v not in ["없음", "해당 없음", "해당없음", "N/A"]:
+                    data["map_query"] = v
+            elif "명칭" in k or "표시" in k or "구역명" in k:
+                if v and v not in ["없음", "해당 없음", "해당없음", "N/A"]:
+                    data["map_title"] = v
+            elif "설명" in k or "지역" in k:
+                if v and v not in ["없음", "해당 없음", "해당없음", "N/A"]:
+                    data["map_desc"] = v
+
+    if not data["need_map"]:
+        return {"need_map": False, "map_query": "", "map_title": "", "map_desc": ""}
+
+    return data if data["map_query"] or data["map_title"] else None
 
 
 def _get_image_mime(extension: str) -> str:
@@ -416,6 +501,8 @@ class GeminiBlogService:
             "titles": _extract_titles(raw_text),
             "body": _extract_body(raw_text),
             "tags": _extract_tags(raw_text),
+            "dashboard_data": _extract_dashboard_data(raw_text),
+            "map_data": _extract_map_data(raw_text),
             "raw": raw_text
         }
 

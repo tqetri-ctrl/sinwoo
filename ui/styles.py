@@ -366,30 +366,38 @@ _PLACEHOLDER_RULES = [
 
 
 def _render_chart_embed(val: str = "") -> str:
-    """인포그래픽 요약 카드 임베드 HTML 렌더링"""
+    """인포그래픽 요약 카드 임베드 HTML 렌더링 (테이블 레이아웃으로 상하 여백 100% 제거)"""
     desc = f" - {val}" if val else ""
     return (
-        '<div class="visual-card-box chart-visual" style="margin: 16px 0; text-align: center; background: #F8FAFC; border: 1.5px solid #BFDBFE; border-radius: 12px; padding: 12px 10px;">'
-        f'<div style="font-size: 13px; font-weight: 700; color: #1D4ED8; margin-bottom: 8px; text-align: left;">'
-        f'📊 <strong>[핵심 요약 인포그래픽 카드]</strong>{desc}</div>'
-        '<img src="chart_preview.png" width="620" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #E2E8F0; display: block; margin: 0 auto;">'
-        '<div style="font-size: 12px; color: #64748B; margin-top: 6px;">'
-        '💡 상단 <strong>[📊 차트 복사]</strong> 버튼을 누르면 이 고화질 카드가 클립보드에 복사되어 블로그에 바로 첨부됩니다.</div>'
-        '</div>'
+        '<table class="embed-card-table" cellspacing="0" cellpadding="0" style="width: 100%; margin: 14px 0; background-color: #F8FAFC; border: 1.5px solid #BFDBFE; border-radius: 12px; border-collapse: separate;">'
+        '<tr><td style="padding: 10px 14px 6px 14px; border: none; font-size: 13px; font-weight: bold; color: #1D4ED8; background-color: transparent;">'
+        f'📊 <strong>[핵심 요약 인포그래픽 카드]</strong>{desc}'
+        '</td></tr>'
+        '<tr><td align="center" style="padding: 0 8px; border: none; background-color: transparent;">'
+        '<img src="chart_preview.png" width="620" height="400" style="border-radius: 8px; border: 1px solid #CBD5E1;">'
+        '</td></tr>'
+        '<tr><td align="center" style="padding: 6px 14px 10px 14px; border: none; font-size: 12px; color: #64748B; background-color: transparent;">'
+        '💡 상단 <strong>[📊 차트 복사]</strong> 버튼을 누르면 이 고화질 카드가 클립보드에 복사되어 블로그에 바로 첨부됩니다.'
+        '</td></tr>'
+        '</table>'
     )
 
 
 def _render_map_embed(val: str = "") -> str:
-    """정비구역/매물 위치도 임베드 HTML 렌더링"""
+    """정비구역/매물 위치도 임베드 HTML 렌더링 (테이블 레이아웃으로 상하 여백 100% 제거)"""
     desc = f" - {val}" if val else ""
     return (
-        '<div class="visual-card-box map-visual" style="margin: 16px 0; text-align: center; background: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 12px; padding: 12px 10px;">'
-        f'<div style="font-size: 13px; font-weight: 700; color: #0284C7; margin-bottom: 8px; text-align: left;">'
-        f'🗺️ <strong>[정비구역 / 매물 위치도]</strong>{desc}</div>'
-        '<img src="zone_map_preview.png" width="620" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #E2E8F0; display: block; margin: 0 auto;">'
-        '<div style="font-size: 12px; color: #64748B; margin-top: 6px;">'
-        '💡 상단 <strong>[🗺️ 구역 지도 복사]</strong> 버튼을 누르면 이 고화질 위치도가 클립보드에 복사되어 블로그에 바로 첨부됩니다.</div>'
-        '</div>'
+        '<table class="embed-card-table" cellspacing="0" cellpadding="0" style="width: 100%; margin: 14px 0; background-color: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 12px; border-collapse: separate;">'
+        '<tr><td style="padding: 10px 14px 6px 14px; border: none; font-size: 13px; font-weight: bold; color: #0284C7; background-color: transparent;">'
+        f'🗺️ <strong>[정비구역 / 매물 위치도]</strong>{desc}'
+        '</td></tr>'
+        '<tr><td align="center" style="padding: 0 8px; border: none; background-color: transparent;">'
+        '<img src="zone_map_preview.png" width="620" height="400" style="border-radius: 8px; border: 1px solid #CBD5E1;">'
+        '</td></tr>'
+        '<tr><td align="center" style="padding: 6px 14px 10px 14px; border: none; font-size: 12px; color: #64748B; background-color: transparent;">'
+        '💡 상단 <strong>[🗺️ 구역 지도 복사]</strong> 버튼을 누르면 이 고화질 위치도가 클립보드에 복사되어 블로그에 바로 첨부됩니다.'
+        '</td></tr>'
+        '</table>'
     )
 
 
@@ -447,9 +455,9 @@ def generate_blog_preview_html(
         lambda m: _render_placeholder_box(m, has_chart, has_zone_map),
         html_body
     )
-    # p 태그로 감싸진 div 블록 정제 (불필요한 상하 여백 제거)
+    # p 태그로 감싸진 visual-card 테이블 블록 정제 (불필요한 p 마진 제거)
     html_body = re.sub(
-        r'<p>\s*(<div class="visual-card-box[^>]*>.*?</div>)\s*</p>',
+        r'<p>\s*(<table class="embed-card-table"[^>]*>.*?</table>)\s*</p>',
         r'\1',
         html_body,
         flags=re.DOTALL
@@ -479,20 +487,19 @@ def generate_blog_preview_html(
             font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", "NanumSquare", sans-serif;
             background-color: #FFFFFF;
             color: #222222;
-            line-height: 1.85;
-            padding: 30px 40px;
+            padding: 24px 20px;
             margin: 0;
             font-size: 15px;
             letter-spacing: -0.3px;
         }}
         .blog-container {{
-            max-width: 720px;
+            max-width: 680px;
             margin: 0 auto;
         }}
         .blog-header {{
             border-bottom: 2px solid #03C75A;
             padding-bottom: 18px;
-            margin-bottom: 30px;
+            margin-bottom: 24px;
         }}
         .blog-category {{
             font-size: 13px;
@@ -513,8 +520,12 @@ def generate_blog_preview_html(
             color: #333333;
         }}
         .blog-content p {{
+            line-height: 1.85;
             margin-bottom: 20px;
             word-break: keep-all;
+        }}
+        table.embed-card-table td {{
+            border: none !important;
         }}
         .blog-content h1, .blog-content h2, .blog-content h3 {{
             color: #111111;
