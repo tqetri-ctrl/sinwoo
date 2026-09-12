@@ -393,26 +393,38 @@ def _render_map_embed(val: str = "") -> str:
     )
 
 
+def _render_photo_placeholder(cleaned: str) -> str:
+    """사진 계열 플레이스홀더 렌더링"""
+    if not re.match(r'^(사진\s*\d+|현장\s*사진|추천\s*사진|실제\s*사진|공간\s*사진)\s*:', cleaned):
+        return ""
+    parts = cleaned.split(":", 1)
+    prefix = parts[0].strip()
+    val = parts[1].strip() if len(parts) > 1 else ""
+    return f'<div class="placeholder-box photo-box"><span class="icon">📸</span><strong>[{prefix}]</strong> {val}</div>'
+
+
+def _render_rule_box(box_cls: str, icon: str, label: str, val: str, has_chart: bool, has_zone_map: bool) -> str:
+    """규칙 기반 박스 또는 시각적 임베드 렌더링"""
+    if box_cls == "data-box" and has_chart:
+        return _render_chart_embed(val)
+    if box_cls == "map-box" and has_zone_map:
+        return _render_map_embed(val)
+    return f'<div class="placeholder-box {box_cls}"><span class="icon">{icon}</span><strong>{label}</strong> {val}</div>'
+
+
 def _render_placeholder_box(match, has_chart: bool = False, has_zone_map: bool = False) -> str:
     """플레이스홀더 텍스트를 시각적 요소 카드 또는 실제 이미지 임베드로 변환"""
     raw = match.group(1).strip()
     cleaned = re.sub(r'^[✨💡📸📊📞🗺️]\s*', '', raw).strip()
 
-    # 사진 계열 ([📸 사진 1: ...], [📸 현장 사진: ...] 등)
-    if re.match(r'^(사진\s*\d+|현장\s*사진|추천\s*사진|실제\s*사진|공간\s*사진)\s*:', cleaned):
-        parts = cleaned.split(":", 1)
-        prefix = parts[0].strip()
-        val = parts[1].strip() if len(parts) > 1 else ""
-        return f'<div class="placeholder-box photo-box"><span class="icon">📸</span><strong>[{prefix}]</strong> {val}</div>'
+    photo_box = _render_photo_placeholder(cleaned)
+    if photo_box:
+        return photo_box
 
     for prefixes, box_cls, icon, label in _PLACEHOLDER_RULES:
         if cleaned.startswith(prefixes):
             val = cleaned.split(":", 1)[1].strip() if ":" in cleaned else cleaned
-            if box_cls == "data-box" and has_chart:
-                return _render_chart_embed(val)
-            if box_cls == "map-box" and has_zone_map:
-                return _render_map_embed(val)
-            return f'<div class="placeholder-box {box_cls}"><span class="icon">{icon}</span><strong>{label}</strong> {val}</div>'
+            return _render_rule_box(box_cls, icon, label, val, has_chart, has_zone_map)
 
     return match.group(0)
 
