@@ -360,7 +360,7 @@ QListWidget#PhotoList::item:selected {
 _PLACEHOLDER_RULES = [
     (("추천 스티커:", "추천스티커:", "스티커:"), "sticker-box", "✨", "[네이버 스티커]"),
     (("추천 자료:", "추천자료:", "추천 표:", "추천표:", "추천 차트:", "추천차트:", "자료:", "추천 그래프:", "추천그래프:"), "data-box", "📊", "[자료/그래프]"),
-    (("네이버 지도", "지도 첨부", "추천 지도", "지도:", "네이버지도", "구역 지도", "구역지도", "정비구역 지도", "위치도", "토지이음"), "map-box", "🗺️", "[지도/위치도 첨부]"),
+    (("네이버 지도", "지도 첨부", "추천 지도", "지도:", "네이버지도", "구역 지도", "구역지도", "정비구역 지도", "정비구역", "위치도", "매물 위치도", "토지이음"), "map-box", "🗺️", "[지도/위치도 첨부]"),
     (("추천 배너:", "추천배너:", "명함 배너:", "상담 배너:"), "banner-box", "📞", "[사무소 명함/상담 배너]"),
 ]
 
@@ -370,14 +370,11 @@ def _render_chart_embed(val: str = "") -> str:
     desc = f" - {val}" if val else ""
     return (
         '<table class="embed-card-table" cellspacing="0" cellpadding="0" style="width: 100%; margin: 14px 0; background-color: #F8FAFC; border: 1.5px solid #BFDBFE; border-radius: 12px; border-collapse: separate;">'
-        '<tr><td style="padding: 10px 14px 6px 14px; border: none; font-size: 13px; font-weight: bold; color: #1D4ED8; background-color: transparent;">'
+        '<tr><td style="padding: 10px 14px 8px 14px; border: none; font-size: 13px; font-weight: bold; color: #1D4ED8; background-color: transparent;">'
         f'📊 <strong>[핵심 요약 인포그래픽 카드]</strong>{desc}'
         '</td></tr>'
-        '<tr><td align="center" style="padding: 0 8px; border: none; background-color: transparent;">'
+        '<tr><td align="center" style="padding: 0 8px 12px 8px; border: none; background-color: transparent;">'
         '<img src="chart_preview.png" width="620" height="400" style="border-radius: 8px; border: 1px solid #CBD5E1;">'
-        '</td></tr>'
-        '<tr><td align="center" style="padding: 6px 14px 10px 14px; border: none; font-size: 12px; color: #64748B; background-color: transparent;">'
-        '💡 상단 <strong>[📊 차트 복사]</strong> 버튼을 누르면 이 고화질 카드가 클립보드에 복사되어 블로그에 바로 첨부됩니다.'
         '</td></tr>'
         '</table>'
     )
@@ -388,14 +385,11 @@ def _render_map_embed(val: str = "") -> str:
     desc = f" - {val}" if val else ""
     return (
         '<table class="embed-card-table" cellspacing="0" cellpadding="0" style="width: 100%; margin: 14px 0; background-color: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 12px; border-collapse: separate;">'
-        '<tr><td style="padding: 10px 14px 6px 14px; border: none; font-size: 13px; font-weight: bold; color: #0284C7; background-color: transparent;">'
+        '<tr><td style="padding: 10px 14px 8px 14px; border: none; font-size: 13px; font-weight: bold; color: #0284C7; background-color: transparent;">'
         f'🗺️ <strong>[정비구역 / 매물 위치도]</strong>{desc}'
         '</td></tr>'
-        '<tr><td align="center" style="padding: 0 8px; border: none; background-color: transparent;">'
+        '<tr><td align="center" style="padding: 0 8px 12px 8px; border: none; background-color: transparent;">'
         '<img src="zone_map_preview.png" width="620" height="400" style="border-radius: 8px; border: 1px solid #CBD5E1;">'
-        '</td></tr>'
-        '<tr><td align="center" style="padding: 6px 14px 10px 14px; border: none; font-size: 12px; color: #64748B; background-color: transparent;">'
-        '💡 상단 <strong>[🗺️ 구역 지도 복사]</strong> 버튼을 누르면 이 고화질 위치도가 클립보드에 복사되어 블로그에 바로 첨부됩니다.'
         '</td></tr>'
         '</table>'
     )

@@ -125,6 +125,12 @@ def test_hannam_case():
     body = _extract_body(SAMPLE_RESPONSE_HANNAM)
     assert "[인포그래픽 핵심 데이터]" not in body
     assert "[지도 시각화 데이터]" not in body
+    # 블로그 무관 안내문 제거 검증 (네이버 지도 검색 등록 및 상단 복사 지시문 제거)
+    assert "네이버 지도 첨부 추천" not in body
+    assert "상단 '구역 지도 복사' 후 본문에 붙여넣기" not in body
+    # 플레이스홀더는 원형 보존 검증
+    assert "[🗺️ 정비구역 / 매물 위치도]" in body
+    assert "[📊 추천 자료: 한남3구역 핵심 사업 추진 인포그래픽]" in body
 
     # 지도 이미지 렌더링 검증
     map_img = generate_zone_map_image(map_data["map_query"], display_title=map_data["map_title"])

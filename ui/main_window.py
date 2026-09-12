@@ -28,7 +28,7 @@ from PyQt6.QtGui import QFont, QIcon, QClipboard, QTextDocument, QImage
 from config import load_config, save_config
 from prompts.blog_templates import TONE_PRESETS
 from services.chart_service import extract_summary_items, render_infographic_card, copy_chart_to_clipboard
-from services.gemini_service import GeminiBlogService
+from services.gemini_service import GeminiBlogService, clean_body_instructions
 from services.news_search_service import fetch_yonhap_realestate_news
 from services.zone_map_service import (
     generate_zone_map_image, copy_zone_map_to_clipboard, open_eum_viewer,
@@ -692,6 +692,32 @@ class MainWindow(QMainWindow):
         title_box_layout.addWidget(self.combo_titles)
         card_layout.addWidget(title_box)
 
+        # 블로그 발행 가이드 박스 (복사되지 않는 전용 안내 영역)
+        self.guide_box = QFrame()
+        self.guide_box.setObjectName("GuideBox")
+        self.guide_box.setStyleSheet(
+            "QFrame#GuideBox {"
+            "  background-color: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 8px; padding: 4px 10px;"
+            "}"
+        )
+        guide_layout = QHBoxLayout(self.guide_box)
+        guide_layout.setContentsMargins(6, 4, 6, 4)
+        guide_layout.setSpacing(8)
+
+        self.lbl_guide_icon = QLabel("💡")
+        self.lbl_guide_icon.setStyleSheet("font-size: 15px;")
+
+        self.lbl_guide_text = QLabel(
+            "<b>[블로그 발행 안내]</b> [📋 네이버 블로그 복사]로 본문을 붙여넣은 후, "
+            "상단 <b>[📊 차트 복사]</b>와 <b>[🗺️ 구역 지도 복사]</b>를 눌러 본문 플레이스홀더 위치에 사진으로 첨부하세요."
+        )
+        self.lbl_guide_text.setStyleSheet("color: #166534; font-size: 13px; line-height: 1.4;")
+        self.lbl_guide_text.setWordWrap(True)
+
+        guide_layout.addWidget(self.lbl_guide_icon)
+        guide_layout.addWidget(self.lbl_guide_text, 1)
+        card_layout.addWidget(self.guide_box)
+
         # 2. 결과 탭 (📱 네이버 블로그 미리보기 / ✏️ 직접 수정하기)
         self.result_tab = QTabWidget()
 
@@ -992,9 +1018,23 @@ class MainWindow(QMainWindow):
         # 3. 해시태그 반영
         self.edit_tags.setText(" ".join(result["tags"]))
 
-        # 3.5. AI가 실시간 자동 수집/추출한 인포그래픽 핵심 지표 데이터 보관
         self._current_dashboard_data = result.get("dashboard_data")
         self._current_map_data = result.get("map_data")
+
+        # 3.6. 상단 가이드 영역에 주제별 맞춤 발행 팁 업데이트 (복사되지 않는 전용 영역)
+        if self._current_map_data and self._current_map_data.get("need_map"):
+            map_q = self._current_map_data.get("map_query") or self._current_map_data.get("map_title", "")
+            map_tip = f" 네이버 블로그 지도 첨부에서 <b>'{map_q}'</b>를 검색하여 등록하시면 상위 노출에 더욱 효과적입니다." if map_q and map_q != "없음" else ""
+            self.lbl_guide_text.setText(
+                "<b>[블로그 발행 안내]</b> [📋 네이버 블로그 복사]로 본문을 붙여넣은 후, "
+                "상단 <b>[📊 차트 복사]</b> 및 <b>[🗺️ 구역 지도 복사]</b> 버튼을 눌러 원하는 위치에 [Ctrl+V]로 첨부하세요."
+                + map_tip
+            )
+        else:
+            self.lbl_guide_text.setText(
+                "<b>[블로그 발행 안내]</b> [📋 네이버 블로그 복사]로 본문을 붙여넣은 후, "
+                "상단 <b>[📊 차트 복사]</b> 버튼을 눌러 고화질 요약 카드를 본문 원하는 위치에 [Ctrl+V]로 첨부하세요. (거시 정책 주제로 지도는 자동 생략되었습니다.)"
+            )
 
         # 4. 차트 및 구역 지도 비주얼 생성 및 바인딩
         self.generate_preview_visuals(force_refresh=True)
@@ -1182,9 +1222,10 @@ class MainWindow(QMainWindow):
     def on_copy_for_naver(self):
         """
         네이버 스마트에디터 ONE에 맞춘 리치텍스트/HTML + 플레인 텍스트 클립보드 복사
+        (플레이스홀더를 제외한 블로그 무관 안내문구 자동 정제)
         """
         current_title = self.combo_titles.currentText().replace("📌 ", "").strip()
-        body_text = self.edit_body.toPlainText()
+        body_text = clean_body_instructions(self.edit_body.toPlainText())
         tags_text = self.edit_tags.text()
 
         if not body_text:
@@ -1243,9 +1284,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "오류", "차트 이미지를 생성하지 못했습니다.")
 
     def on_copy_plain_text(self):
-        """일반 텍스트 복사"""
+        """일반 텍스트 복사 (플레이스홀더 제외 안내문구 자동 정제)"""
         current_title = self.combo_titles.currentText().replace("📌 ", "").strip()
-        body_text = self.edit_body.toPlainText()
+        body_text = clean_body_instructions(self.edit_body.toPlainText())
         tags_text = self.edit_tags.text()
 
         if not body_text:

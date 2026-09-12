@@ -98,6 +98,38 @@ def _extract_tags(text: str) -> list:
     return tags or DEFAULT_FALLBACK_TAGS
 
 
+def clean_body_instructions(text: str) -> str:
+    """
+    본문에서 플레이스홀더를 제외한 블로그 무관 안내문(조작 지시문 등)을 제거하고
+    플레이스홀더 내부의 복사 안내문구('상단 ... 후 붙여넣기')를 정제
+    """
+    if not text:
+        return ""
+
+    lines = []
+    for line in text.splitlines():
+        trimmed = line.strip()
+
+        # 1. 독자에게 무의미한 독립된 지도 검색/첨부 안내 라인은 본문에서 완전 제외 (UI 가이드로 이동)
+        if re.search(r'\[(?:🗺️\s*)?네이버\s*지도\s*첨부\s*추천.*?\]', trimmed):
+            continue
+
+        # 2. 플레이스홀더 내부의 복사 지시문 정제: [🗺️ ... 위치도: 상단 ... 후 붙여넣기] -> [🗺️ 위치도]
+        cleaned_line = re.sub(
+            r'\[(🗺️\s*(?:정비구역|매물|대상지)?\s*(?:/\s*매물)?\s*위치도)\s*:\s*상단\s*[\'"].*?[\'"].*?\]',
+            r'[\1]',
+            line
+        )
+        cleaned_line = re.sub(r'\(상단\s*[\'"].*?[\'"].*?붙여넣기\)', '', cleaned_line)
+        cleaned_line = re.sub(r'\[(?:🗺️\s*)?네이버\s*지도\s*첨부\s*추천.*?\]', '', cleaned_line)
+
+        if cleaned_line.strip() or not line.strip():
+            lines.append(cleaned_line)
+
+    result = "\n".join(lines)
+    return re.sub(r'\n{3,}', '\n\n', result).strip()
+
+
 def _extract_body(text: str) -> str:
     """생성된 텍스트에서 본문 마크다운 추출 (인포그래픽 데이터, 지도 데이터 및 태그 영역 제외)"""
     if SECTION_BODY in text:
@@ -105,7 +137,7 @@ def _extract_body(text: str) -> str:
         for end_marker in [SECTION_DASHBOARD, SECTION_MAP_DATA, SECTION_TAGS]:
             if end_marker in body_part:
                 body_part = body_part.split(end_marker, 1)[0]
-        return body_part.strip()
+        return clean_body_instructions(body_part.strip())
 
     cleaned = text
     if SECTION_TITLES in cleaned:
@@ -115,7 +147,7 @@ def _extract_body(text: str) -> str:
     for end_marker in [SECTION_DASHBOARD, SECTION_MAP_DATA, SECTION_TAGS]:
         if end_marker in cleaned:
             cleaned = cleaned.split(end_marker, 1)[0]
-    return cleaned.strip()
+    return clean_body_instructions(cleaned.strip())
 
 
 def _parse_dashboard_field(data: dict, k: str, v: str):
