@@ -30,7 +30,7 @@ from prompts.blog_templates import TONE_PRESETS
 from services.chart_service import extract_summary_items, render_infographic_card, copy_chart_to_clipboard
 from services.gemini_service import GeminiBlogService
 from services.news_search_service import fetch_yonhap_realestate_news
-from services.zone_map_service import generate_zone_map_image, copy_zone_map_to_clipboard, open_eum_viewer
+from services.zone_map_service import generate_zone_map_image, copy_zone_map_to_clipboard, open_eum_viewer, KNOWN_ZONES
 from ui.styles import MAIN_STYLESHEET, generate_blog_preview_html
 
 DEFAULT_MODEL_NAME = "gemini-3.6-flash"
@@ -1382,6 +1382,46 @@ class MainWindow(QMainWindow):
         QApplication.clipboard().setText(tags_text)
         QMessageBox.information(self, "복사 완료", "해시태그가 클립보드에 복사되었습니다.")
 
+    @staticmethod
+    def _clean_korean_word(text: str) -> str:
+        """공백 및 특수기호를 제거한 순수 한글/영숫자 단어 추출"""
+        return re.sub(r"[^0-9a-zA-Z가-힣]", "", text)
+
+    def _match_known_zone(self, text: str) -> str:
+        """내장 정비구역 DB 매칭"""
+        compact = self._clean_korean_word(text)
+        for k in KNOWN_ZONES:
+            if k in compact:
+                return k
+        return ""
+
+    def _scan_zone_token(self, tokens: list, i: int, token: str) -> str:
+        """구역 또는 동 단위 토큰 분석"""
+        clean_tok = self._clean_korean_word(token)
+        if token.endswith("구역"):
+            if i > 0:
+                prev = self._clean_korean_word(tokens[i - 1])
+                if not prev.endswith(("은", "는", "이", "가", "의", "를", "을", "에")):
+                    return f"{prev} {clean_tok}"
+            return clean_tok
+        if clean_tok.endswith("동"):
+            return clean_tok
+        return ""
+
+    def _extract_zone_keyword(self, text: str) -> str:
+        """텍스트에서 정비구역명 또는 행정동 키워드 추출 (초고속 O(N) 탐색)"""
+        if not text:
+            return ""
+        known = self._match_known_zone(text)
+        if known:
+            return known
+        tokens = text.split()
+        for i, token in enumerate(tokens):
+            found = self._scan_zone_token(tokens, i, token)
+            if found:
+                return found
+        return ""
+
     def _get_current_zone_or_location(self) -> str:
         """현재 입력 모드나 본문에서 구역명 또는 소재지 위치 추출"""
         mode_idx = self.stacked_input.currentIndex()
@@ -1390,11 +1430,11 @@ class MainWindow(QMainWindow):
             if loc:
                 return loc
         elif mode_idx == 1:
-            topic = self.edit_news_topic.text().strip()
+            topic = self.edit_news_topic.toPlainText().strip()
             if topic:
-                m = re.search(r"([가-힣a-zA-Z0-9·]+\s*\d+\s*구역|[가-힣a-zA-Z0-9·]+동)", topic)
-                if m:
-                    return m.group(1).strip()
+                found = self._extract_zone_keyword(topic)
+                if found:
+                    return found
                 return topic[:20]
         elif mode_idx == 2:
             topic = self.edit_file_topic.text().strip()
@@ -1402,9 +1442,9 @@ class MainWindow(QMainWindow):
                 return topic[:20]
 
         title = self.combo_titles.currentText()
-        m = re.search(r"([가-힣a-zA-Z0-9·]+\s*\d+\s*구역)", title)
-        if m:
-            return m.group(1).strip()
+        found = self._extract_zone_keyword(title)
+        if found:
+            return found
 
         return "도마변동5구역"
 
