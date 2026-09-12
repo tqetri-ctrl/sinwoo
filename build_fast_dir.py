@@ -56,7 +56,7 @@ def build_fast_directory():
         print(" [Success] High-Speed Folder package created successfully!")
         print(f" Folder Location: {dist_dir}")
         print(f" Executable File: {exe_path}")
-        print(" ⚡ 실행 팁: dist 폴더 내의 실행 파일 바로가기를 만들거나 폴더 전체를 배포하세요.")
+        print(" [Tip] dist 폴더 내의 실행 파일 바로가기를 만들거나 폴더 전체를 배포하세요.")
         print(DIVIDER)
     else:
         print("\n[Error] Build failed.")
