@@ -311,14 +311,14 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # 상단 헤더 바
+        # 상단 헤더 바 (높이 고정, 상단 여백 팽창 방지)
         header = self.create_header()
-        main_layout.addWidget(header)
+        main_layout.addWidget(header, 0)
 
         # 본문 반응형 스플리터 (화면 크기에 따라 가로/세로 유연하게 자동 조절)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(False)
-        self.splitter.setContentsMargins(12, 8, 12, 8)
+        self.splitter.setContentsMargins(12, 6, 12, 6)
         self.splitter.setHandleWidth(8)
 
         # 좌측: 1-2-3단계 입력 영역
@@ -335,7 +335,7 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(1, 5)
         self.splitter.setCollapsible(0, False)
         self.splitter.setCollapsible(1, False)
-        main_layout.addWidget(self.splitter)
+        main_layout.addWidget(self.splitter, 1)
 
     def resizeEvent(self, event):
         """화면 크기 변경 시 레이아웃을 최적화하는 반응형(Responsive) 이벤트 핸들러"""
@@ -356,11 +356,13 @@ class MainWindow(QMainWindow):
             self.lbl_subtitle.setVisible(True)
 
     def create_header(self) -> QWidget:
-        """상단 헤더 카드 (로고, 상태, 간편 설정 버튼) - 반응형 슬림 바"""
+        """상단 헤더 카드 (로고, 상태, 간편 설정 버튼) - 슬림 바 (높이 고정으로 낭비 여백 원천 차단)"""
         header = QFrame()
         header.setObjectName("HeaderCard")
+        header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        header.setFixedHeight(50)
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(16, 8, 16, 8)
+        layout.setContentsMargins(16, 4, 16, 4)
         layout.setSpacing(12)
 
         # 좌측 타이틀 (가로 인라인 배치로 위아래 낭비 공간 최소화)

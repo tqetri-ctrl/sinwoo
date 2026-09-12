@@ -25,7 +25,8 @@ QFrame#CardFrame {
 QFrame#HeaderCard {
     background-color: #FFFFFF;
     border-bottom: 1px solid #E2E8F0;
-    padding: 6px 16px;
+    padding: 4px 16px;
+    max-height: 50px;
 }
 
 /* 라벨 스타일 */
