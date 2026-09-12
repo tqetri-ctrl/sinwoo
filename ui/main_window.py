@@ -21,9 +21,9 @@ from PyQt6.QtWidgets import (
     QSizePolicy
 )
 # pyrefly: ignore [missing-import]
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QMimeData
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QMimeData, QUrl
 # pyrefly: ignore [missing-import]
-from PyQt6.QtGui import QFont, QIcon, QClipboard
+from PyQt6.QtGui import QFont, QIcon, QClipboard, QTextDocument, QImage
 
 from config import load_config, save_config
 from prompts.blog_templates import TONE_PRESETS
@@ -280,6 +280,8 @@ class MainWindow(QMainWindow):
         self.selected_doc_files = []  # 문서/자료 탭 첨부파일 목록
         self.yonhap_articles = []  # 연합뉴스 실시간 부동산 속보 목록
         self.yonhap_thread = None
+        self._current_chart_img = None
+        self._current_zone_map_img = None
 
         self.init_window()
         self.init_ui()
@@ -1207,7 +1209,10 @@ class MainWindow(QMainWindow):
         # 3. 해시태그 반영
         self.edit_tags.setText(" ".join(result["tags"]))
 
-        # 4. 스마트에디터 HTML 미리보기 업데이트
+        # 4. 차트 및 구역 지도 비주얼 생성 및 바인딩
+        self.generate_preview_visuals(force_refresh=True)
+
+        # 5. 스마트에디터 HTML 미리보기 업데이트
         self.update_preview()
 
         # 결과 탭으로 포커스
@@ -1256,8 +1261,70 @@ class MainWindow(QMainWindow):
             f"글을 생성하는 동안 문제가 발생했습니다:\n\n{error_msg}\n\n{guide}"
         )
 
+    def _create_current_chart(self) -> QImage:
+        """현재 본문 기반 인포그래픽 차트 이미지 생성"""
+        body_text = self.edit_body.toPlainText().strip()
+        if not body_text:
+            return None
+        current_title = self.combo_titles.currentText().replace("📌 ", "").strip() or "부동산 핵심 체크포인트"
+        office_name = self.config.get("office_name", "").strip() or "신우 공인중개사사무소"
+
+        mode = "property" if self.stacked_input.currentIndex() == 0 else "news"
+        prop_info = None
+        if mode == "property":
+            prop_info = {
+                "deal_type": self.combo_deal_type.currentText(),
+                "property_type": self.combo_prop_type.currentText(),
+                "location": self.edit_prop_location.text().strip(),
+                "price": self.edit_prop_price.text().strip(),
+                "area_structure": self.edit_prop_area.text().strip(),
+                "features": self.edit_prop_features.text().strip(),
+            }
+
+        items = extract_summary_items(body_text, mode=mode, property_info=prop_info)
+        category_label = "매물 핵심 Check Point" if mode == "property" else "부동산 정책/이슈 핵심 요약"
+        return render_infographic_card(current_title, items, office_name=office_name, card_category=category_label)
+
+    def _create_current_zone_map(self) -> QImage:
+        """현재 구역/소재지 기반 정비구역 위치도 이미지 생성"""
+        zone_query = self._get_current_zone_or_location()
+        office_name = self.config.get("office_name", "").strip() or "신우 공인중개사사무소"
+        return generate_zone_map_image(zone_query, office_name=office_name)
+
+    def generate_preview_visuals(self, force_refresh: bool = False):
+        """차트 및 구역 지도 이미지를 생성하여 QTextBrowser 리소스에 바인딩"""
+        body_text = self.edit_body.toPlainText().strip()
+        if not body_text:
+            return
+
+        if self._current_chart_img is None or force_refresh:
+            self._current_chart_img = self._create_current_chart()
+        if self._current_chart_img and not self._current_chart_img.isNull():
+            self.preview_browser.document().addResource(
+                QTextDocument.ResourceType.ImageResource.value,
+                QUrl("chart_preview.png"),
+                self._current_chart_img
+            )
+
+        if self._current_zone_map_img is None or force_refresh:
+            self._current_zone_map_img = self._create_current_zone_map()
+        if self._current_zone_map_img and not self._current_zone_map_img.isNull():
+            self.preview_browser.document().addResource(
+                QTextDocument.ResourceType.ImageResource.value,
+                QUrl("zone_map_preview.png"),
+                self._current_zone_map_img
+            )
+
     def on_title_changed(self, index: int):
-        """제목 선택 변경 시 미리보기 업데이트"""
+        """제목 선택 변경 시 미리보기 및 비주얼 업데이트"""
+        if self._current_chart_img:
+            self._current_chart_img = self._create_current_chart()
+            if self._current_chart_img:
+                self.preview_browser.document().addResource(
+                    QTextDocument.ResourceType.ImageResource.value,
+                    QUrl("chart_preview.png"),
+                    self._current_chart_img
+                )
         self.update_preview()
 
     def on_editor_text_changed(self):
@@ -1272,7 +1339,16 @@ class MainWindow(QMainWindow):
         body_text = self.edit_body.toPlainText()
         tags = [t for t in self.edit_tags.text().split() if t.strip()]
 
-        preview_html = generate_blog_preview_html(current_title, body_text, tags)
+        if body_text.strip() and (self._current_chart_img is None or self._current_zone_map_img is None):
+            self.generate_preview_visuals()
+
+        has_chart = self._current_chart_img is not None and not self._current_chart_img.isNull()
+        has_zone_map = self._current_zone_map_img is not None and not self._current_zone_map_img.isNull()
+
+        preview_html = generate_blog_preview_html(
+            current_title, body_text, tags,
+            has_chart=has_chart, has_zone_map=has_zone_map
+        )
         self.preview_browser.setHtml(preview_html)
 
     def on_copy_for_naver(self):
@@ -1322,32 +1398,11 @@ class MainWindow(QMainWindow):
 
     def on_copy_chart_image(self):
         """본문 내용과 통계/스펙을 기반으로 고해상도 인포그래픽 카드 이미지를 생성하여 클립보드에 복사"""
-        body_text = self.edit_body.toPlainText().strip()
-        if not body_text:
+        img = self._current_chart_img or self._create_current_chart()
+        if img is None or img.isNull():
             QMessageBox.warning(self, "알림", "복사할 내용이 없습니다. 먼저 블로그 글을 생성해주세요.")
             return
-
-        current_title = self.combo_titles.currentText().replace("📌 ", "").strip()
-        if not current_title:
-            current_title = "부동산 핵심 체크포인트"
-
-        office_name = self.config.get("office_name", "").strip() or "신우 공인중개사사무소"
-
-        mode = "property" if self.stacked_input.currentIndex() == 0 else "news"
-        prop_info = None
-        if mode == "property":
-            prop_info = {
-                "deal_type": self.combo_deal_type.currentText(),
-                "property_type": self.combo_prop_type.currentText(),
-                "location": self.edit_prop_location.text().strip(),
-                "price": self.edit_prop_price.text().strip(),
-                "area_structure": self.edit_prop_area.text().strip(),
-                "features": self.edit_prop_features.text().strip(),
-            }
-
-        items = extract_summary_items(body_text, mode=mode, property_info=prop_info)
-        category_label = "매물 핵심 Check Point" if mode == "property" else "부동산 정책/이슈 핵심 요약"
-        img = render_infographic_card(current_title, items, office_name=office_name, card_category=category_label)
+        self._current_chart_img = img
 
         if copy_chart_to_clipboard(img):
             QMessageBox.information(
@@ -1451,9 +1506,12 @@ class MainWindow(QMainWindow):
     def on_copy_zone_map(self):
         """정비구역 위치도/지적 약도 이미지를 생성하여 클립보드에 복사"""
         zone_query = self._get_current_zone_or_location()
-        office_name = self.config.get("office_name", "").strip() or "신우 공인중개사사무소"
+        img = self._current_zone_map_img or self._create_current_zone_map()
+        if img is None or img.isNull():
+            QMessageBox.warning(self, "오류", "구역 지도 이미지를 생성하지 못했습니다.")
+            return
+        self._current_zone_map_img = img
 
-        img = generate_zone_map_image(zone_query, office_name=office_name)
         if copy_zone_map_to_clipboard(img):
             QMessageBox.information(
                 self,

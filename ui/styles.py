@@ -365,8 +365,36 @@ _PLACEHOLDER_RULES = [
 ]
 
 
-def _render_placeholder_box(match) -> str:
-    """플레이스홀더 텍스트를 시각적 요소 카드 HTML로 변환"""
+def _render_chart_embed(val: str = "") -> str:
+    """인포그래픽 요약 카드 임베드 HTML 렌더링"""
+    desc = f" - {val}" if val else ""
+    return (
+        '<div class="visual-card-box chart-visual" style="margin: 22px 0; text-align: center; background: #F8FAFC; border: 1.5px solid #BFDBFE; border-radius: 12px; padding: 14px 12px;">'
+        f'<div style="font-size: 13px; font-weight: 700; color: #1D4ED8; margin-bottom: 8px; text-align: left;">'
+        f'📊 <strong>[핵심 요약 인포그래픽 카드]</strong>{desc}</div>'
+        '<img src="chart_preview.png" style="max-width: 100%; border-radius: 8px; border: 1px solid #E2E8F0;">'
+        '<div style="font-size: 12px; color: #64748B; margin-top: 6px;">'
+        '💡 상단 <strong>[📊 차트 복사]</strong> 버튼을 누르면 이 고화질 카드가 클립보드에 복사되어 블로그에 바로 첨부됩니다.</div>'
+        '</div>'
+    )
+
+
+def _render_map_embed(val: str = "") -> str:
+    """정비구역/매물 위치도 임베드 HTML 렌더링"""
+    desc = f" - {val}" if val else ""
+    return (
+        '<div class="visual-card-box map-visual" style="margin: 22px 0; text-align: center; background: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 12px; padding: 14px 12px;">'
+        f'<div style="font-size: 13px; font-weight: 700; color: #0284C7; margin-bottom: 8px; text-align: left;">'
+        f'🗺️ <strong>[정비구역 / 매물 위치도]</strong>{desc}</div>'
+        '<img src="zone_map_preview.png" style="max-width: 100%; border-radius: 8px; border: 1px solid #E2E8F0;">'
+        '<div style="font-size: 12px; color: #64748B; margin-top: 6px;">'
+        '💡 상단 <strong>[🗺️ 구역 지도 복사]</strong> 버튼을 누르면 이 고화질 위치도가 클립보드에 복사되어 블로그에 바로 첨부됩니다.</div>'
+        '</div>'
+    )
+
+
+def _render_placeholder_box(match, has_chart: bool = False, has_zone_map: bool = False) -> str:
+    """플레이스홀더 텍스트를 시각적 요소 카드 또는 실제 이미지 임베드로 변환"""
     raw = match.group(1).strip()
     cleaned = re.sub(r'^[✨💡📸📊📞🗺️]\s*', '', raw).strip()
 
@@ -380,18 +408,45 @@ def _render_placeholder_box(match) -> str:
     for prefixes, box_cls, icon, label in _PLACEHOLDER_RULES:
         if cleaned.startswith(prefixes):
             val = cleaned.split(":", 1)[1].strip() if ":" in cleaned else cleaned
+            if box_cls == "data-box" and has_chart:
+                return _render_chart_embed(val)
+            if box_cls == "map-box" and has_zone_map:
+                return _render_map_embed(val)
             return f'<div class="placeholder-box {box_cls}"><span class="icon">{icon}</span><strong>{label}</strong> {val}</div>'
 
     return match.group(0)
 
 
-def generate_blog_preview_html(title: str, body_markdown: str, tags: list) -> str:
+def generate_blog_preview_html(
+    title: str,
+    body_markdown: str,
+    tags: list,
+    has_chart: bool = False,
+    has_zone_map: bool = False
+) -> str:
     """
     네이버 블로그 스마트에디터 ONE과 흡사한 단정하고 깔끔한 HTML 미리보기 렌더링 생성
+    (실제 생성된 인포그래픽 차트 및 구역 지도 이미지 인라인 임베드 지원)
     """
     # 마크다운 ➔ HTML 변환 (tables 확장 포함)
     html_body = markdown.markdown(body_markdown, extensions=['extra', 'nl2br', 'tables'])
-    html_body = re.sub(r'\[([^\]\r\n]+)\]', _render_placeholder_box, html_body)
+    html_body = re.sub(
+        r'\[([^\]\r\n]+)\]',
+        lambda m: _render_placeholder_box(m, has_chart, has_zone_map),
+        html_body
+    )
+
+    if has_chart and "chart_preview.png" not in html_body:
+        chart_html = _render_chart_embed("본문 핵심 데이터 요약")
+        if "</table>" in html_body:
+            parts = html_body.split("</table>", 1)
+            html_body = f"{parts[0]}</table>{chart_html}{parts[1]}"
+        else:
+            html_body = f"{chart_html}{html_body}"
+
+    if has_zone_map and "zone_map_preview.png" not in html_body:
+        map_html = _render_map_embed("현장 및 주변 정비구역 위치도")
+        html_body = f"{html_body}{map_html}"
 
     tag_html = " ".join([f'<span class="tag-badge">{t}</span>' for t in tags])
 

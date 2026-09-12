@@ -86,8 +86,11 @@ def resolve_coordinates(zone_or_addr: str) -> tuple:
     return 36.3168, 127.3785, f"{zone_or_addr} 정비사업지", zone_or_addr
 
 
+_TILE_CACHE = {}
+
+
 def _download_and_draw_tiles(p: QPainter, center_x: float, center_y: float, zoom: int, width: int, height: int):
-    """지도 타일을 그리드 형태로 다운로드하여 캔버스에 합성"""
+    """지도 타일을 그리드 형태로 다운로드하여 캔버스에 합성 (메모리 캐싱 적용)"""
     tile_w, tile_h = 256, 256
     base_xtile = int(center_x)
     base_ytile = int(center_y)
@@ -103,15 +106,20 @@ def _download_and_draw_tiles(p: QPainter, center_x: float, center_y: float, zoom
         for dy in range(-2, 3):
             tx = base_xtile + dx
             ty = base_ytile + dy
-            tile_url = f"https://tile.openstreetmap.org/{zoom}/{tx}/{ty}.png"
-            try:
-                req = urllib.request.Request(tile_url, headers=headers)
-                with urllib.request.urlopen(req, timeout=2.5) as r:
-                    tile_img = QImage()
-                    tile_img.loadFromData(r.read())
-                    p.drawImage(start_px + dx * tile_w, start_py + dy * tile_h, tile_img)
-            except Exception:
-                pass
+            tile_key = (zoom, tx, ty)
+            data = _TILE_CACHE.get(tile_key)
+            if data is None:
+                tile_url = f"https://tile.openstreetmap.org/{zoom}/{tx}/{ty}.png"
+                try:
+                    req = urllib.request.Request(tile_url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=2.5) as r:
+                        data = r.read()
+                        _TILE_CACHE[tile_key] = data
+                except Exception:
+                    continue
+            tile_img = QImage()
+            if tile_img.loadFromData(data):
+                p.drawImage(start_px + dx * tile_w, start_py + dy * tile_h, tile_img)
 
 
 def _draw_zone_annotations(p: QPainter, width: int, height: int, display_title: str, office_name: str):
