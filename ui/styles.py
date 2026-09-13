@@ -284,6 +284,25 @@ QPushButton#EumOpenButton:pressed {
     background-color: #115E59;
 }
 
+/* 카드뉴스 이미지 일괄 저장 버튼 (퍼플/바이올렛) */
+QPushButton#CardExportButton {
+    background-color: #7C3AED;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 13px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton#CardExportButton:hover {
+    background-color: #6D28D9;
+}
+
+QPushButton#CardExportButton:pressed {
+    background-color: #5B21B6;
+}
+
 /* 라디오 버튼 (카드형 톤앤매너 선택용) */
 QRadioButton {
     font-size: 15px;

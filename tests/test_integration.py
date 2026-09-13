@@ -17,7 +17,11 @@ from services.gemini_service import (
     _extract_titles, _extract_body, _extract_tags,
     _extract_dashboard_data, _extract_map_data
 )
-from services.chart_service import render_infographic_card, _build_zone_dashboard_metrics, _resolve_progress_bar_text
+from services.chart_service import (
+    render_infographic_card, _build_zone_dashboard_metrics, _resolve_progress_bar_text,
+    render_statistical_chart
+)
+from services.card_image_service import export_card_news_images
 from services.text_utils import deduplicate_consecutive_emojis, has_leading_emoji, strip_leading_emojis
 from services.zone_map_service import generate_zone_map_image, extract_zone_keyword
 from ui.styles import (
@@ -360,6 +364,43 @@ def test_emoji_deduplication():
     print("[PASS] test_emoji_deduplication")
 
 
+def test_card_images_export():
+    """카드뉴스 슬라이드 PNG 다중 일괄 내보내기 검증"""
+    import tempfile
+    import shutil
+
+    body = _extract_body(SAMPLE_RESPONSE_CARD_NEWS)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        files = export_card_news_images(
+            body_markdown=body,
+            output_dir=tmpdir,
+            office_name="신우 공인중개사사무소",
+            office_phone="02-123-4567"
+        )
+        assert len(files) == 6
+        for idx, fpath in enumerate(files, start=1):
+            assert os.path.exists(fpath)
+            assert os.path.basename(fpath) == f"card_{idx:02d}.png"
+            assert os.path.getsize(fpath) > 1000  # 유효한 크기의 이미지 파일
+
+    print("[PASS] test_card_images_export")
+
+
+def test_statistical_chart_render():
+    """통계 비교 막대 그래프 렌더링 검증"""
+    sample_stats = [
+        ("기존 스트레스 DSR", "1.2%", "%"),
+        ("개편 스트레스 DSR", "2.5%", "%"),
+        ("대출한도 축소액", "3,500만원", "만원"),
+    ]
+    img = render_statistical_chart("2026 스트레스 DSR 대출한도 영향 비교", sample_stats, office_name="신우 공인중개사")
+    assert img is not None
+    assert not img.isNull()
+    assert img.width() == 620
+    assert img.height() == 400
+    print("[PASS] test_statistical_chart_render")
+
+
 if __name__ == "__main__":
     print("\n[Running Integration Tests]")
     test_zone_extraction()
@@ -367,6 +408,8 @@ if __name__ == "__main__":
     test_policy_case()
     test_card_news_case()
     test_emoji_deduplication()
+    test_card_images_export()
+    test_statistical_chart_render()
     print("\nALL INTEGRATION TESTS PASSED SUCCESSFULLY!")
 
 

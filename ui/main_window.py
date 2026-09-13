@@ -27,6 +27,7 @@ from PyQt6.QtGui import QFont, QIcon, QClipboard, QTextDocument, QImage
 
 from config import load_config, save_config
 from prompts.blog_templates import TONE_PRESETS
+from services.card_image_service import export_card_news_images
 from services.chart_service import extract_summary_items, render_infographic_card, copy_chart_to_clipboard
 from services.gemini_service import GeminiBlogService, clean_body_instructions
 from services.news_search_service import fetch_yonhap_realestate_news
@@ -680,6 +681,14 @@ class MainWindow(QMainWindow):
         btn_copy_plain.clicked.connect(self.on_copy_plain_text)
         action_header.addWidget(btn_copy_plain)
 
+        # 카드뉴스 슬라이드 이미지 PNG 다중 일괄 내보내기 버튼 (퍼플/바이올렛)
+        self.btn_export_cards = QPushButton("🖼️ 카드 이미지 저장")
+        self.btn_export_cards.setObjectName("CardExportButton")
+        self.btn_export_cards.setToolTip("카드뉴스 슬라이드를 1:1 고화질 PNG 이미지(card_01.png, card_02.png...)로 일괄 저장합니다.")
+        self.btn_export_cards.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_export_cards.clicked.connect(self.on_export_cards)
+        action_header.addWidget(self.btn_export_cards)
+
         card_layout.addLayout(action_header)
 
         # 1. 추천 제목 선택 바
@@ -1327,6 +1336,59 @@ class MainWindow(QMainWindow):
             return
         QApplication.clipboard().setText(tags_text)
         QMessageBox.information(self, "복사 완료", "해시태그가 클립보드에 복사되었습니다.")
+
+    def on_export_cards(self):
+        """카드뉴스 슬라이드를 1:1 고해상도 PNG(card_01.png, card_02.png...)로 일괄 내보내기"""
+        body_text = clean_body_instructions(self.edit_body.toPlainText())
+        if not body_text.strip():
+            QMessageBox.warning(self, "알림", "내보낼 카드뉴스 본문이 없습니다. 먼저 글을 생성해주세요.")
+            return
+
+        default_folder = os.path.join(os.path.expanduser("~"), "Pictures", "신우_카드뉴스")
+        chosen_dir = QFileDialog.getExistingDirectory(self, "카드뉴스 이미지를 저장할 폴더를 선택하세요", default_folder)
+        if not chosen_dir:
+            return
+
+        office_name = self.config.get("office_name", "")
+        office_phone = self.config.get("office_phone", "")
+
+        chart_img = self._current_chart_img or self._create_current_chart()
+        zone_map_img = self._current_zone_map_img
+
+        try:
+            saved_files = export_card_news_images(
+                body_markdown=body_text,
+                output_dir=chosen_dir,
+                office_name=office_name,
+                office_phone=office_phone,
+                chart_img=chart_img,
+                zone_map_img=zone_map_img
+            )
+
+            if not saved_files:
+                QMessageBox.warning(self, "오류", "카드뉴스 슬라이드를 감지하거나 분할하지 못했습니다.")
+                return
+
+            preview_list = "\n".join(f"- {os.path.basename(f)}" for f in saved_files[:6])
+            extra = f"\n... 외 {len(saved_files) - 6}장" if len(saved_files) > 6 else ""
+
+            reply = QMessageBox.information(
+                self,
+                "카드뉴스 저장 완료! 🖼️",
+                f"총 {len(saved_files)}장의 카드뉴스 이미지가 성공적으로 저장되었습니다!\n\n"
+                f"📁 저장 위치:\n{chosen_dir}\n\n"
+                f"생성 파일:\n{preview_list}{extra}\n\n"
+                "저장된 폴더를 지금 여시겠습니까?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+
+            if reply == QMessageBox.StandardButton.Yes:
+                try:
+                    os.startfile(chosen_dir)
+                except Exception as e:
+                    print(f"폴더 열기 오류: {e}")
+        except Exception as ex:
+            QMessageBox.critical(self, "저장 오류", f"카드 이미지 저장 중 오류가 발생했습니다:\n{str(ex)}")
 
     def _get_mode_location_candidate(self, mode_idx: int) -> str:
         """현재 UI 입력 모드에 따른 위치/주제 텍스트 후보 반환"""

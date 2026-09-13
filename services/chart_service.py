@@ -462,6 +462,102 @@ def _draw_generic_dashboard(p: QPainter, width: int, height: int, title: str, it
     p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"{office_str}네이버 블로그 공식 포스팅 요약 차트")
 
 
+def _draw_statistical_bar_chart(p: QPainter, width: int, height: int, title: str, stats_data: list, office_name: str, card_category: str):
+    """통계 데이터 비교 가로 막대 그래프 렌더링"""
+    card_rect = QRectF(2, 2, width - 4, height - 4)
+    p.setBrush(QColor("#F8FAFC"))
+    p.setPen(QPen(QColor("#CBD5E1"), 1.2))
+    p.drawRoundedRect(card_rect, 12, 12)
+
+    banner_rect = QRectF(12, 12, width - 24, 68)
+    p.setBrush(QColor("#1E3A8A"))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.drawRoundedRect(banner_rect, 8, 8)
+
+    clean_cat = strip_leading_emojis(card_category).strip()
+    p.setPen(QColor("#93C5FD"))
+    p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"📊 {clean_cat.upper()}")
+
+    _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
+
+    valid_data = []
+    for item in (stats_data or [])[:5]:
+        if len(item) >= 2:
+            lbl = str(item[0])
+            val_str = str(item[1])
+            nums = re.findall(r'[\d\.]+', val_str)
+            num_val = float(nums[0]) if nums else 10.0
+            valid_data.append((lbl, num_val, val_str))
+
+    if not valid_data:
+        valid_data = [("기존 (종전)", 100.0, "100%"), ("개편 (현행)", 150.0, "150%")]
+
+    max_num = max(d[1] for d in valid_data) or 1.0
+    start_y = 96
+    row_h = int((height - 140) / len(valid_data))
+    bar_max_w = width - 260
+
+    colors = [
+        ("#2563EB", "#3B82F6"),
+        ("#059669", "#10B981"),
+        ("#D97706", "#F59E0B"),
+        ("#7C3AED", "#8B5CF6"),
+        ("#DC2626", "#EF4444"),
+    ]
+
+    for idx, (label, num_val, display_val) in enumerate(valid_data):
+        cy = start_y + idx * row_h
+        p.setPen(QColor("#1E293B"))
+        p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+        p.drawText(QRectF(20, cy, 110, row_h - 10), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, label)
+
+        track_rect = QRectF(140, cy + (row_h - 24) / 2, bar_max_w, 24)
+        p.setBrush(QColor("#E2E8F0"))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(track_rect, 6, 6)
+
+        bar_w = max(24.0, bar_max_w * (num_val / max_num))
+        bar_rect = QRectF(140, cy + (row_h - 24) / 2, bar_w, 24)
+        grad = QLinearGradient(140, cy, 140 + bar_w, cy)
+        c_pair = colors[idx % len(colors)]
+        grad.setColorAt(0.0, QColor(c_pair[0]))
+        grad.setColorAt(1.0, QColor(c_pair[1]))
+        p.setBrush(QBrush(grad))
+        p.drawRoundedRect(bar_rect, 6, 6)
+
+        p.setPen(QColor(c_pair[0]))
+        p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+        p.drawText(QRectF(140 + bar_w + 10, cy, 100, row_h - 10), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, display_val)
+
+    footer_rect = QRectF(14, height - 30, width - 28, 20)
+    p.setPen(QColor("#64748B"))
+    p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
+    clean_office = strip_leading_emojis(office_name).strip()
+    office_str = f"🏢 {clean_office} | " if clean_office else ""
+    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"{office_str}네이버 블로그 공식 통계 비교 차트")
+
+
+def render_statistical_chart(
+    title: str,
+    stats_data: list,
+    office_name: str = "",
+    chart_category: str = "부동산 핵심 통계 지표 비교"
+) -> QImage:
+    """수치/통계 데이터 비교 가로 막대 그래프 QImage 생성 (620x400)"""
+    width = 620
+    height = 400
+    img = QImage(width, height, QImage.Format.Format_ARGB32)
+    img.fill(QColor("#FFFFFF"))
+    p = QPainter(img)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    clean_title = strip_leading_emojis(title).strip()
+    _draw_statistical_bar_chart(p, width, height, clean_title, stats_data, office_name, chart_category)
+    p.end()
+    return img
+
+
 def render_infographic_card(
     title: str,
     items: list = None,
@@ -469,12 +565,14 @@ def render_infographic_card(
     card_category: str = "부동산 핵심 체크포인트",
     zone_name: str = "",
     zone_data: dict = None,
-    property_info: dict = None
+    property_info: dict = None,
+    stats_data: list = None
 ) -> QImage:
     """
     네이버 블로그 본문 1:1 최적화(620x400) 고해상도 대시보드 인포그래픽 카드 생성
     - 정비구역 데이터(세대수, 시공사, 단계, 공정률 바) 자동 수집 시각화
     - 매물 정보(가격, 면적, 특장점) 4대 지표 카드 시각화
+    - 통계/수치 비교 막대 그래프(stats_data) 시각화
     - 불필요한 하단 여백 완전 제거 (1:1 픽셀 매칭)
     """
     width = 620
@@ -489,7 +587,9 @@ def render_infographic_card(
 
     clean_title = strip_leading_emojis(title).strip()
 
-    if zone_data:
+    if stats_data:
+        _draw_statistical_bar_chart(p, width, height, clean_title, stats_data, office_name, card_category)
+    elif zone_data:
         _draw_zone_dashboard(p, width, height, clean_title, zone_name or "정비사업지", zone_data, office_name)
     elif property_info and any(property_info.values()):
         _draw_property_dashboard(p, width, height, clean_title, property_info, office_name)
