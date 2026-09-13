@@ -2,7 +2,9 @@ import io
 import os
 import re
 from datetime import datetime
-from prompts.blog_templates import TONE_PRESETS, SYSTEM_PROMPT_TEMPLATE, PROPERTY_PROMPT_TEMPLATE
+from prompts.blog_templates import (
+    TONE_PRESETS, SYSTEM_PROMPT_TEMPLATE, PROPERTY_PROMPT_TEMPLATE, CARD_NEWS_PROMPT_TEMPLATE
+)
 from services.file_parser import extract_text_from_file
 from services.news_search_service import fetch_hybrid_news, format_news_for_prompt
 
@@ -334,42 +336,6 @@ def _prepare_file_content(file_paths: list, topic: str):
 
     return prompt_header
 
-
-class GeminiBlogService:
-    def __init__(self, api_key: str = "", model_name: str = DEFAULT_MODEL):
-        self.api_key = api_key
-        self.model_name = self._sanitize_model_name(model_name)
-
-    def _sanitize_model_name(self, model_name: str) -> str:
-        """모델명 정리 및 안정 모델 폴백"""
-        if not model_name or model_name not in SUPPORTED_MODELS:
-            for sup in SUPPORTED_MODELS:
-                if sup in str(model_name):
-                    return sup
-            return DEFAULT_MODEL
-        return model_name
-
-    def set_api_key(self, api_key: str):
-        self.api_key = api_key
-
-    def set_model(self, model_name: str):
-        self.model_name = self._sanitize_model_name(model_name)
-
-    def _build_system_prompt(self, tone_key: str, config: dict, is_property: bool = False) -> str:
-        """선택된 톤앤매너 및 사무소 정보, 최신성 지침으로 시스템 프롬프트 조립"""
-        cfg = config or {}
-        tone_info = TONE_PRESETS.get(tone_key, TONE_PRESETS["neighbor"])
-        tone_instruction = tone_info["instruction"] + _format_emoji_instruction(cfg.get("emoji_density", "normal"))
-        office_instruction = _format_office_info(cfg)
-        freshness_instruction = _format_freshness_instruction(cfg)
-
-        template = PROPERTY_PROMPT_TEMPLATE if is_property else SYSTEM_PROMPT_TEMPLATE
-        return template.format(
-            tone_instruction=tone_instruction,
-            office_info_instruction=office_instruction,
-            freshness_instruction=freshness_instruction
-        )
-
 def _build_news_prompt(topic: str, cfg: dict) -> str:
     """뉴스 기사 브리핑 모드 프롬프트 구성"""
     now = datetime.now()
@@ -462,12 +428,19 @@ class GeminiBlogService:
 
     def _build_system_prompt(self, tone_key: str, config: dict, is_property: bool = False) -> str:
         """선택된 톤앤매너 및 사무소 정보로 시스템 프롬프트 조립"""
+        cfg = config or {}
         tone_info = TONE_PRESETS.get(tone_key, TONE_PRESETS["neighbor"])
-        tone_instruction = tone_info["instruction"] + _format_emoji_instruction(config.get("emoji_density", "normal"))
-        office_instruction = _format_office_info(config)
-        freshness_instruction = _format_freshness_instruction(config)
+        tone_instruction = tone_info["instruction"] + _format_emoji_instruction(cfg.get("emoji_density", "normal"))
+        office_instruction = _format_office_info(cfg)
+        freshness_instruction = _format_freshness_instruction(cfg)
 
-        template = PROPERTY_PROMPT_TEMPLATE if is_property else SYSTEM_PROMPT_TEMPLATE
+        if tone_key == "summary" and not is_property:
+            template = CARD_NEWS_PROMPT_TEMPLATE
+        elif is_property:
+            template = PROPERTY_PROMPT_TEMPLATE
+        else:
+            template = SYSTEM_PROMPT_TEMPLATE
+
         return template.format(
             tone_instruction=tone_instruction,
             office_info_instruction=office_instruction,

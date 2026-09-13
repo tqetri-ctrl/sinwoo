@@ -35,7 +35,9 @@ from services.zone_map_service import (
     get_zone_data, extract_zone_keyword
 )
 from ui.settings_dialog import SettingsDialog
-from ui.styles import MAIN_STYLESHEET, generate_blog_preview_html
+from ui.styles import (
+    MAIN_STYLESHEET, generate_blog_preview_html, is_card_news_text, render_card_news_blocks
+)
 from ui.threads import YonhapNewsLoadThread, BlogGenerationThread
 
 DEFAULT_MODEL_NAME = "gemini-3.6-flash"
@@ -1232,14 +1234,24 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "알림", "복사할 내용이 없습니다. 먼저 글을 생성해주세요.")
             return
 
-        import markdown
-        # 스마트에디터에 깔끔하게 붙여넣어지는 심플 HTML 구성
-        body_html = markdown.markdown(body_text, extensions=['extra', 'nl2br', 'tables'])
+        is_card_news = is_card_news_text(body_text)
 
-        # 스마트에디터 ONE 표(Table) 맞춤형 인라인 스타일 보강 (깨짐 방지 및 세련된 테두리/헤더)
-        body_html = body_html.replace('<table>', '<table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; background-color: #FFFFFF; border: 1px solid #CBD5E1;">')
-        body_html = body_html.replace('<th>', '<th style="background-color: #F1F5F9; color: #1E293B; font-weight: bold; padding: 10px 14px; border: 1px solid #CBD5E1; text-align: center;">')
-        body_html = body_html.replace('<td>', '<td style="padding: 10px 14px; border: 1px solid #CBD5E1; color: #334155;">')
+        if is_card_news:
+            body_html = render_card_news_blocks(
+                body_text,
+                has_chart=bool(self._current_chart_img),
+                has_zone_map=bool(self._current_zone_map_img),
+                for_clipboard=True
+            )
+        else:
+            import markdown
+            # 스마트에디터에 깔끔하게 붙여넣어지는 심플 HTML 구성
+            body_html = markdown.markdown(body_text, extensions=['extra', 'nl2br', 'tables'])
+
+            # 스마트에디터 ONE 표(Table) 맞춤형 인라인 스타일 보강 (깨짐 방지 및 세련된 테두리/헤더)
+            body_html = body_html.replace('<table>', '<table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; background-color: #FFFFFF; border: 1px solid #CBD5E1;">')
+            body_html = body_html.replace('<th>', '<th style="background-color: #F1F5F9; color: #1E293B; font-weight: bold; padding: 10px 14px; border: 1px solid #CBD5E1; text-align: center;">')
+            body_html = body_html.replace('<td>', '<td style="padding: 10px 14px; border: 1px solid #CBD5E1; color: #334155;">')
         
         full_html = f"""
         <div style="font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; line-height: 1.85; font-size: 15px; color: #222222;">
@@ -1259,10 +1271,18 @@ class MainWindow(QMainWindow):
         clipboard = QApplication.clipboard()
         clipboard.setMimeData(mime, QClipboard.Mode.Clipboard)
 
+        msg = (
+            "네이버 블로그 카드뉴스 맞춤 서식(슬라이드형 카드 글상자 포함)으로 복사되었습니다! ⚡\n\n"
+            "네이버 블로그 스마트에디터 화면에서 [Ctrl + V] 로 붙여넣으시면 각 슬라이드가 깔끔한 카드 박스 서식으로 들어갑니다."
+            if is_card_news else
+            "네이버 블로그 맞춤 서식(표/서식 포함)으로 복사되었습니다!\n\n"
+            "네이버 블로그 스마트에디터 화면에서 [Ctrl + V] 로 붙여넣으시면 제목, 본문, 비교표 서식이 그대로 들어갑니다."
+        )
+
         QMessageBox.information(
             self,
             "복사 완료! 📋",
-            "네이버 블로그 맞춤 서식(표/서식 포함)으로 복사되었습니다!\n\n네이버 블로그 스마트에디터 화면에서 [Ctrl + V] 로 붙여넣으시면 제목, 본문, 비교표 서식이 그대로 들어갑니다."
+            msg
         )
 
     def on_copy_chart_image(self):

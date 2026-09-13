@@ -19,7 +19,7 @@ from services.gemini_service import (
 )
 from services.chart_service import render_infographic_card
 from services.zone_map_service import generate_zone_map_image, extract_zone_keyword
-from ui.styles import generate_blog_preview_html
+from ui.styles import generate_blog_preview_html, is_card_news_text, render_card_news_blocks
 
 app = QApplication.instance() or QApplication(sys.argv)
 
@@ -176,10 +176,100 @@ def test_policy_case():
     print("[PASS] test_policy_case")
 
 
+SAMPLE_RESPONSE_CARD_NEWS = """
+[제목 후보]
+1. ⚡ 3분 만에 끝내는 2026 재개발 핵심 총정리
+2. 한눈에 보는 재개발 사업 단계별 완벽 가이드
+3. 정비사업 투자 전 반드시 알아야 할 체크포인트
+
+[블로그 본문]
+[카드 01 | 표지]
+# ⚡ 2026 재개발 핵심 총정리
+- 바쁜 분들을 위한 한눈에 쏙 들어오는 3분 카드뉴스
+
+[카드 02 | 이슈 브리핑]
+### 🔍 왜 지금 주목해야 할까요?
+- 최근 정부의 정비사업 규제 완화 발표로 전국 주요 사업지가 들썩이고 있습니다.
+- 사업 단계에 따라 기대 수익과 투자 리스크가 극명하게 갈리기 때문입니다.
+
+[카드 03 | 핵심 팩트 체크]
+### 📌 3대 핵심 추진 단계
+- **조합설립**: 사업 본격 착수 (진행률 약 35%)
+- **사업시행인가**: 건축 및 세대수 확정 (진행률 약 55%)
+- **관리처분인가**: 조합원 분양가 및 비례율 산정 (진행률 약 70%)
+
+[카드 04 | 한눈에 보는 수치]
+### 📊 단계별 진행률 & 지표
+| 단계 구분 | 종전 평균 소요 | 개편 후 단축 목표 |
+| :--- | :--- | :--- |
+| 구역지정~인가 | 5.2년 | 3.5년 |
+| 인가~착공 | 4.8년 | 3.0년 |
+
+[📊 추천 자료: 정비사업 단계별 핵심 요약 카드]
+
+[카드 05 | 공인중개사 실전 가이드]
+### 💡 실거주 & 투자자 맞춤 가이드
+- **실거주 목적**: 사업시행인가 완료 후 이주비 대출 조건을 꼼꼼히 확인하세요.
+- **투자 목적**: 관리처분인가 전후 프리미엄(P) 변동폭을 반드시 점검하세요.
+
+[카드 06 | 에필로그 & 상담 안내]
+### 🤝 신우공인중개사 3줄 브리핑
+- 정비사업은 추진 단계에 맞는 타이밍 선점이 핵심입니다.
+- 복잡한 권리가액 및 비례율 계산, 전문가와 함께하세요.
+- 친절하고 정확한 상담으로 보답하겠습니다.
+
+[📞 추천 배너: 신우 공인중개사사무소 명함 배너]
+
+[인포그래픽 핵심 데이터]
+- 대시보드 분류: 2026 재개발 정비사업 핵심 요약
+- 사업지/주제명: 2026 정비사업 가이드
+- 추진단계/현황: 사업시행인가 및 관리처분 단계
+- 진행률: 70%
+- 핵심지표1: 단축 목표 | 평균 10년 -> 6.5년 단축
+- 핵심지표2: 안전진단 | 통과 기준 대폭 완화
+- 핵심지표3: 분양권 자격 | 권리산정기준일 주의
+- 핵심지표4: 자금 조달 | 이주비/중도금 대출 점검
+
+[지도 시각화 데이터]
+- 지도생성: N
+- 지도검색어: 없음
+- 지도표시명칭: 없음
+- 지도지역설명: 없음
+
+[네이버 블로그 추천 태그]
+#재개발 #카드뉴스 #정비사업 #신우공인중개사 #부동산투자
+"""
+
+
+def test_card_news_case():
+    """3분 요약 카드뉴스 포맷 감지, 카드 슬라이드 분할 및 HTML 박스 서식 검증"""
+    body = _extract_body(SAMPLE_RESPONSE_CARD_NEWS)
+    assert is_card_news_text(body) is True
+
+    # 1) UI 미리보기 HTML 렌더링 검증
+    html = generate_blog_preview_html("3분 카드뉴스", body, ["#재개발", "#카드뉴스"], has_chart=True, has_zone_map=False)
+    assert '<div class="card-news-frame">' in html
+    assert html.count('<div class="card-news-frame">') == 6
+    assert "CARD 01 | 표지" in html
+    assert "CARD 04 | 한눈에 보는 수치" in html
+    assert "CARD 06 | 에필로그 &amp; 상담 안내" in html or "CARD 06 | 에필로그" in html
+    assert html.count("chart_preview.png") == 1
+
+    # 2) 네이버 블로그 스마트에디터 ONE 복사용 인라인 스타일 박스 검증
+    clip_html = render_card_news_blocks(body, has_chart=True, has_zone_map=False, for_clipboard=True)
+    assert "background-color: #F8FAFC" in clip_html
+    assert "border: 1.5px solid #CBD5E1" in clip_html
+    assert "CARD 01 | 표지" in clip_html
+    assert "CARD 06" in clip_html
+    print("[PASS] test_card_news_case")
+
+
 if __name__ == "__main__":
     print("\n[Running Integration Tests]")
     test_zone_extraction()
     test_hannam_case()
     test_policy_case()
+    test_card_news_case()
     print("\nALL INTEGRATION TESTS PASSED SUCCESSFULLY!")
+
 

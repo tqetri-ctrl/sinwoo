@@ -437,27 +437,137 @@ def _render_placeholder_box(match, has_chart: bool = False, has_zone_map: bool =
     return match.group(0)
 
 
-def generate_blog_preview_html(
-    title: str,
-    body_markdown: str,
-    tags: list,
-    has_chart: bool = False,
-    has_zone_map: bool = False
-) -> str:
-    """
-    네이버 블로그 스마트에디터 ONE과 흡사한 단정하고 깔끔한 HTML 미리보기 렌더링 생성
-    (실제 생성된 인포그래픽 차트 및 구역 지도 이미지 인라인 임베드 지원)
-    """
-    embed_state = {"chart_done": False, "map_done": False}
+def is_card_news_text(text: str) -> bool:
+    """텍스트가 슬라이드형 카드뉴스([카드 01], [Card 01] 등) 구조인지 감지"""
+    if not text:
+        return False
+    return bool(re.search(r'(?:###\s*)?\[(?:카드|Card)\s*\d+', text, re.IGNORECASE))
 
-    # 마크다운 ➔ HTML 변환 (tables 확장 포함)
+
+def _split_into_cards(text: str) -> list:
+    """본문 마크다운을 카드 블록 목록으로 분할"""
+    pattern = re.compile(r'(?m)^\s*(?:###\s*)?\[((?:카드|Card)\s*\d+)(?:\s*[\|\:–-]([^\]\n]+))?\]', re.IGNORECASE)
+    matches = list(pattern.finditer(text))
+    if not matches:
+        return []
+
+    cards = []
+    preamble = text[:matches[0].start()].strip()
+    if preamble:
+        cards.append({
+            "badge": "INTRO",
+            "title": "안내",
+            "content": preamble
+        })
+
+    for i, m in enumerate(matches):
+        raw_label = m.group(1).strip()
+        subtitle = (m.group(2) or "").strip()
+        digits = re.findall(r'\d+', raw_label)
+        card_num = f"{int(digits[0]):02d}" if digits else "01"
+        badge = f"CARD {card_num}"
+        if subtitle:
+            badge += f" | {subtitle}"
+
+        start_idx = m.end()
+        end_idx = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        content = text[start_idx:end_idx].strip()
+        cards.append({
+            "badge": badge,
+            "title": subtitle,
+            "content": content
+        })
+
+    return cards
+
+
+def render_card_news_blocks(
+    body_markdown: str,
+    has_chart: bool = False,
+    has_zone_map: bool = False,
+    embed_state: dict = None,
+    for_clipboard: bool = False
+) -> str:
+    """카드뉴스 블록을 HTML 카드 프레임으로 렌더링 (미리보기 및 클립보드 공용)"""
+    st = embed_state if embed_state is not None else {"chart_done": False, "map_done": False}
+    cards = _split_into_cards(body_markdown)
+    if not cards:
+        return ""
+
+    card_html_list = []
+    for card in cards:
+        c_md = card["content"]
+        c_html = markdown.markdown(c_md, extensions=['extra', 'nl2br', 'tables'])
+        c_html = re.sub(
+            r'\[([^\]\r\n]+)\]',
+            lambda m: _render_placeholder_box(m, has_chart, has_zone_map, st),
+            c_html
+        )
+        c_html = re.sub(
+            r'<p>\s*(<table class="embed-card-table"[^>]*>.*?</table>)\s*</p>',
+            r'\1',
+            c_html,
+            flags=re.DOTALL
+        )
+
+        if for_clipboard:
+            # 네이버 블로그 스마트에디터 ONE 친화적 인라인 스타일 박스
+            c_html = c_html.replace('<table>', '<table style="width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; background-color: #FFFFFF; border: 1px solid #CBD5E1;">')
+            c_html = c_html.replace('<th>', '<th style="background-color: #F1F5F9; color: #1E293B; font-weight: bold; padding: 8px 12px; border: 1px solid #CBD5E1; text-align: center;">')
+            c_html = c_html.replace('<td>', '<td style="padding: 8px 12px; border: 1px solid #CBD5E1; color: #334155;">')
+            c_html = c_html.replace('<h1>', '<h2 style="font-size: 18px; font-weight: bold; color: #0F172A; margin: 6px 0 10px 0;">')
+            c_html = c_html.replace('</h1>', '</h2>')
+            c_html = c_html.replace('<h3>', '<h3 style="font-size: 16px; font-weight: bold; color: #1E293B; border-left: 3px solid #03C75A; padding-left: 8px; margin: 10px 0 8px 0;">')
+
+            card_box = (
+                '<div style="background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 12px; '
+                'padding: 18px 20px; margin: 20px 0; font-family: \'Malgun Gothic\', \'맑은 고딕\', sans-serif;">'
+                f'<div style="display: inline-block; background-color: #03C75A; color: #FFFFFF; font-size: 12px; font-weight: bold; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;">{card["badge"]}</div>'
+                f'<div style="color: #1E293B; font-size: 14.5px; line-height: 1.8;">{c_html}</div>'
+                '</div>'
+            )
+        else:
+            card_box = (
+                '<div class="card-news-frame">'
+                f'<div class="card-news-badge">{card["badge"]}</div>'
+                f'<div class="card-news-body">{c_html}</div>'
+                '</div>'
+            )
+        card_html_list.append(card_box)
+
+    return "\n".join(card_html_list)
+
+
+def _render_card_news_preview(
+    body_markdown: str,
+    has_chart: bool,
+    has_zone_map: bool,
+    embed_state: dict
+) -> str:
+    """카드뉴스 미리보기 HTML 변환 및 미배치 임베드 보강"""
+    html_body = render_card_news_blocks(body_markdown, has_chart, has_zone_map, embed_state, for_clipboard=False)
+    if has_chart and not embed_state.get("chart_done", False):
+        chart_html = _render_chart_embed("본문 핵심 데이터 요약")
+        html_body = f"{html_body}\n{chart_html}"
+    if has_zone_map and not embed_state.get("map_done", False):
+        map_html = _render_map_embed("현장 및 주변 정비구역 위치도")
+        html_body = f"{html_body}\n{map_html}"
+    return html_body
+
+
+def _render_standard_blog_body(
+    body_markdown: str,
+    has_chart: bool,
+    has_zone_map: bool,
+    embed_state: dict
+) -> str:
+    """일반 블로그 마크다운 ➔ HTML 변환 및 플레이스홀더/차트/지도 임베드"""
     html_body = markdown.markdown(body_markdown, extensions=['extra', 'nl2br', 'tables'])
     html_body = re.sub(
         r'\[([^\]\r\n]+)\]',
         lambda m: _render_placeholder_box(m, has_chart, has_zone_map, embed_state),
         html_body
     )
-    # p 태그로 감싸진 visual-card 테이블 블록 정제 (불필요한 p 마진 제거)
     html_body = re.sub(
         r'<p>\s*(<table class="embed-card-table"[^>]*>.*?</table>)\s*</p>',
         r'\1',
@@ -476,6 +586,27 @@ def generate_blog_preview_html(
     if has_zone_map and "zone_map_preview.png" not in html_body:
         map_html = _render_map_embed("현장 및 주변 정비구역 위치도")
         html_body = f"{html_body}{map_html}"
+
+    return html_body
+
+
+def generate_blog_preview_html(
+    title: str,
+    body_markdown: str,
+    tags: list,
+    has_chart: bool = False,
+    has_zone_map: bool = False
+) -> str:
+    """
+    네이버 블로그 스마트에디터 ONE과 흡사한 단정하고 깔끔한 HTML 미리보기 렌더링 생성
+    (실제 생성된 인포그래픽 차트 및 구역 지도 이미지 인라인 임베드 지원)
+    """
+    embed_state = {"chart_done": False, "map_done": False}
+
+    if is_card_news_text(body_markdown):
+        html_body = _render_card_news_preview(body_markdown, has_chart, has_zone_map, embed_state)
+    else:
+        html_body = _render_standard_blog_body(body_markdown, has_chart, has_zone_map, embed_state)
 
     tag_html = " ".join([f'<span class="tag-badge">{t}</span>' for t in tags])
 
@@ -614,6 +745,62 @@ def generate_blog_preview_html(
             background-color: #ECFDF5;
             border: 1.5px solid #059669;
             color: #065F46;
+        }}
+        /* 카드뉴스 전용 슬라이드 박스 */
+        .card-news-frame {{
+            background-color: #F8FAFC;
+            border: 1.5px solid #E2E8F0;
+            border-radius: 14px;
+            padding: 20px 22px;
+            margin: 22px 0;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+            transition: all 0.2s ease;
+        }}
+        .card-news-frame:hover {{
+            border-color: #86EFAC;
+            box-shadow: 0 6px 16px rgba(3, 199, 90, 0.08);
+        }}
+        .card-news-badge {{
+            display: inline-block;
+            background: linear-gradient(135deg, #03C75A, #059669);
+            color: #FFFFFF;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+        }}
+        .card-news-body h1 {{
+            font-size: 20px;
+            font-weight: 800;
+            color: #0F172A;
+            margin: 4px 0 12px 0;
+            line-height: 1.4;
+        }}
+        .card-news-body h2 {{
+            font-size: 18px;
+            font-weight: 700;
+            color: #0F172A;
+            margin: 6px 0 10px 0;
+        }}
+        .card-news-body h3 {{
+            font-size: 16px;
+            font-weight: 700;
+            color: #1E293B;
+            border-left: 3px solid #03C75A;
+            padding-left: 8px;
+            margin: 10px 0 10px 0;
+        }}
+        .card-news-body p {{
+            font-size: 14.5px;
+            line-height: 1.75;
+            margin-bottom: 12px;
+            color: #334155;
+        }}
+        .card-news-body ul, .card-news-body ol {{
+            margin-bottom: 12px;
+            padding-left: 22px;
         }}
         .blog-tags {{
             margin-top: 40px;
