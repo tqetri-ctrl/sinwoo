@@ -4,6 +4,7 @@
 
 import re
 import markdown
+from services.text_utils import strip_leading_emojis, deduplicate_consecutive_emojis
 
 MAIN_STYLESHEET = """
 /* 전체 기본 설정 */
@@ -367,7 +368,10 @@ _PLACEHOLDER_RULES = [
 
 def _render_chart_embed(val: str = "") -> str:
     """인포그래픽 요약 카드 임베드 HTML 렌더링 (테이블 레이아웃으로 상하 여백 100% 제거)"""
-    desc = f" - {val}" if val else ""
+    clean_val = strip_leading_emojis(val).strip()
+    clean_val = re.sub(r'^(?:추천\s*(?:자료|표|차트|그래프)|자료)\s*[:：]\s*', '', clean_val).strip().strip("[] ")
+    clean_val = strip_leading_emojis(clean_val).strip()
+    desc = f" - {clean_val}" if clean_val else ""
     return (
         '<table class="embed-card-table" cellspacing="0" cellpadding="0" style="width: 100%; margin: 14px 0; background-color: #F8FAFC; border: 1.5px solid #BFDBFE; border-radius: 12px; border-collapse: separate;">'
         '<tr><td style="padding: 10px 14px 8px 14px; border: none; font-size: 13px; font-weight: bold; color: #1D4ED8; background-color: transparent;">'
@@ -382,7 +386,10 @@ def _render_chart_embed(val: str = "") -> str:
 
 def _render_map_embed(val: str = "") -> str:
     """정비구역/매물 위치도 임베드 HTML 렌더링 (테이블 레이아웃으로 상하 여백 100% 제거)"""
-    desc = f" - {val}" if val else ""
+    clean_val = strip_leading_emojis(val).strip()
+    clean_val = re.sub(r'^(?:정비구역\s*(?:/\s*매물\s*)?위치도|매물\s*위치도|위치도)\s*[:：]\s*', '', clean_val).strip().strip("[] ")
+    clean_val = strip_leading_emojis(clean_val).strip()
+    desc = f" - {clean_val}" if clean_val else ""
     return (
         '<table class="embed-card-table" cellspacing="0" cellpadding="0" style="width: 100%; margin: 14px 0; background-color: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 12px; border-collapse: separate;">'
         '<tr><td style="padding: 10px 14px 8px 14px; border: none; font-size: 13px; font-weight: bold; color: #0284C7; background-color: transparent;">'
@@ -396,17 +403,18 @@ def _render_map_embed(val: str = "") -> str:
 
 
 def _render_photo_placeholder(cleaned: str) -> str:
-    """사진 계열 플레이스홀더 렌더링"""
+    """사진 계열 플레이스홀더 렌더링 (중복 이모지 자동 정제)"""
     if not re.match(r'^(사진\s*\d+|현장\s*사진|추천\s*사진|실제\s*사진|공간\s*사진)\s*:', cleaned):
         return ""
     parts = cleaned.split(":", 1)
-    prefix = parts[0].strip()
-    val = parts[1].strip() if len(parts) > 1 else ""
+    prefix = strip_leading_emojis(parts[0]).strip()
+    val = strip_leading_emojis(parts[1]).strip().strip("[] ") if len(parts) > 1 else ""
+    val = strip_leading_emojis(val).strip()
     return f'<div class="placeholder-box photo-box"><span class="icon">📸</span><strong>[{prefix}]</strong> {val}</div>'
 
 
 def _render_rule_box(box_cls: str, icon: str, label: str, val: str, has_chart: bool, has_zone_map: bool, state: dict = None) -> str:
-    """규칙 기반 박스 또는 시각적 임베드 렌더링 (중복 임베드 자동 방지)"""
+    """규칙 기반 박스 또는 시각적 임베드 렌더링 (중복 임베드 및 중복 이모지 자동 방지)"""
     st = state if state is not None else {}
     if box_cls == "data-box" and has_chart and not st.get("chart_done", False):
         st["chart_done"] = True
@@ -417,7 +425,9 @@ def _render_rule_box(box_cls: str, icon: str, label: str, val: str, has_chart: b
     if box_cls == "map-box" and (st.get("map_done", False) or not has_zone_map):
         # 이미 지도가 위에서 임베드되었거나 지도가 없는 경우 중복 지도 박스 생략
         return ""
-    return f'<div class="placeholder-box {box_cls}"><span class="icon">{icon}</span><strong>{label}</strong> {val}</div>'
+    clean_val = strip_leading_emojis(val).strip().strip("[] ")
+    clean_val = strip_leading_emojis(clean_val).strip()
+    return f'<div class="placeholder-box {box_cls}"><span class="icon">{icon}</span><strong>{label}</strong> {clean_val}</div>'
 
 
 def _render_placeholder_box(match, has_chart: bool = False, has_zone_map: bool = False, state: dict = None) -> str:
@@ -457,12 +467,12 @@ def _split_into_cards(text: str) -> list:
         cards.append({
             "badge": "INTRO",
             "title": "안내",
-            "content": preamble
+            "content": deduplicate_consecutive_emojis(preamble)
         })
 
     for i, m in enumerate(matches):
         raw_label = m.group(1).strip()
-        subtitle = (m.group(2) or "").strip()
+        subtitle = deduplicate_consecutive_emojis((m.group(2) or "").strip())
         digits = re.findall(r'\d+', raw_label)
         card_num = f"{int(digits[0]):02d}" if digits else "01"
         badge = f"CARD {card_num}"
@@ -471,7 +481,7 @@ def _split_into_cards(text: str) -> list:
 
         start_idx = m.end()
         end_idx = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        content = text[start_idx:end_idx].strip()
+        content = deduplicate_consecutive_emojis(text[start_idx:end_idx].strip())
         cards.append({
             "badge": badge,
             "title": subtitle,

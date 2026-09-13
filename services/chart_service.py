@@ -6,6 +6,7 @@
 """
 
 import re
+from services.text_utils import has_leading_emoji, strip_leading_emojis, deduplicate_consecutive_emojis
 # pyrefly: ignore [missing-import]
 from PyQt6.QtCore import QRectF, Qt
 # pyrefly: ignore [missing-import]
@@ -189,12 +190,12 @@ def _build_zone_dashboard_metrics(zone_data: dict, stage_text: str) -> list:
             ("#7C3AED", "#F5F3FF", "#DDD6FE"),
             ("#B45309", "#FFFBEB", "#FDE68A"),
         ]
-        known_icons = ("🏢", "🏗️", "📌", "📍", "🏷️", "💰", "📐", "🌟", "📊", "🚀", "⚡", "👉")
         metrics = []
         for i in range(4):
             lbl, val = custom_metrics[i]
-            prefix = "" if any(lbl.startswith(ic) for ic in known_icons) else f"{icons[i]} "
-            metrics.append((f"{prefix}{lbl}".strip(), val, colors[i][0], colors[i][1], colors[i][2]))
+            clean_lbl = deduplicate_consecutive_emojis(str(lbl)).strip()
+            prefix = "" if has_leading_emoji(clean_lbl) else f"{icons[i]} "
+            metrics.append((f"{prefix}{clean_lbl}".strip(), str(val), colors[i][0], colors[i][1], colors[i][2]))
         return metrics
 
     return [
@@ -229,15 +230,22 @@ def _resolve_step_label(cat_title: str, stage_text: str, progress_val: int) -> s
 
 
 def _resolve_progress_bar_text(cat_title: str, stage_text: str, progress_val: int) -> str:
-    """프로그레스 바 내부 상태 텍스트 결정"""
+    """프로그레스 바 내부 상태 텍스트 결정 (중복 이모지 및 접두사 자동 정제)"""
     is_prop = any(k in cat_title for k in ("매물", "단지", "아파트", "빌라", "오피스텔", "주택", "룸투어"))
     is_new = any(k in stage_text for k in ("신축", "첫 입주", "미입주"))
 
+    clean_stage = strip_leading_emojis(stage_text).strip()
+    clean_stage = re.sub(r'^(?:입주\s*상태|신축\s*첫\s*입주|시행\s*및\s*정착\s*완료)\s*[:：\-–]\s*', '', clean_stage).strip()
+
     if is_prop and progress_val >= 100:
-        return f"✨ 신축 첫 입주: {stage_text} (준공 완료)" if is_new else f"🔑 입주 상태: {stage_text or '즉시 입주 가능'}"
+        if is_new:
+            clean_sub = re.sub(r'^신축\s*첫\s*입주\s*', '', clean_stage).strip().strip("() ")
+            suffix = "" if "준공" in clean_sub else " (준공 완료)"
+            return f"✨ 신축 첫 입주: {clean_sub}{suffix}" if clean_sub else "✨ 신축 첫 입주: 준공/사용승인 완료"
+        return f"🔑 입주 상태: {clean_stage or '즉시 입주 가능'}"
     if progress_val >= 100:
-        return f"✅ 시행 및 정착 완료: {stage_text}"
-    return f"현재 진행률: {progress_val}% ({stage_text})"
+        return f"✅ 시행 및 정착 완료: {clean_stage}"
+    return f"현재 진행률: {progress_val}% ({clean_stage})"
 
 
 def _draw_roadmap_progress_bar(p: QPainter, width: int, bar_y: int, progress_val: int, bar_text: str):
@@ -294,9 +302,10 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
     p.drawRoundedRect(banner_rect, 8, 8)
 
     cat_title = _resolve_zone_banner_title(zone_data, zone_name)
+    clean_cat_title = strip_leading_emojis(cat_title).strip()
     p.setPen(QColor("#93C5FD"))
     p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"📊 {cat_title}")
+    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"📊 {clean_cat_title}")
     _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
 
     progress_val = zone_data.get("progress", 70)
@@ -317,7 +326,8 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
     footer_rect = QRectF(14, height - 30, width - 28, 20)
     p.setPen(QColor("#64748B"))
     p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
-    office_str = f"🏢 {office_name} | " if office_name else ""
+    clean_office = strip_leading_emojis(office_name).strip()
+    office_str = f"🏢 {clean_office} | " if clean_office else ""
     p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"{office_str}네이버 블로그 공식 포스팅 요약 차트")
 
 
@@ -335,7 +345,8 @@ def _draw_property_dashboard(p: QPainter, width: int, height: int, title: str, p
 
     p.setPen(QColor("#99F6E4"))
     p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-    header_title = f"🏠 공인중개사 추천 매물 브리핑 | {office_name}" if office_name else "🏠 공인중개사 추천 매물 브리핑"
+    clean_office = strip_leading_emojis(office_name).strip()
+    header_title = f"🏠 공인중개사 추천 매물 브리핑 | {clean_office}" if clean_office else "🏠 공인중개사 추천 매물 브리핑"
     p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, header_title)
 
     _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
@@ -370,7 +381,8 @@ def _draw_property_dashboard(p: QPainter, width: int, height: int, title: str, p
     footer_rect = QRectF(14, height - 30, width - 28, 20)
     p.setPen(QColor("#64748B"))
     p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
-    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"🏢 {office_name} | 네이버 블로그 공식 포스팅 요약 차트")
+    office_str = f"🏢 {clean_office} | " if clean_office else ""
+    p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"{office_str}네이버 블로그 공식 포스팅 요약 차트")
 
 
 def _draw_generic_dashboard(p: QPainter, width: int, height: int, title: str, items: list, office_name: str, card_category: str):
@@ -385,9 +397,10 @@ def _draw_generic_dashboard(p: QPainter, width: int, height: int, title: str, it
     p.setPen(Qt.PenStyle.NoPen)
     p.drawRoundedRect(banner_rect, 8, 8)
 
+    clean_cat = strip_leading_emojis(card_category).strip()
     p.setPen(QColor("#93C5FD"))
     p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"📊 {card_category.upper()}")
+    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"📊 {clean_cat.upper()}")
 
     _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
 
@@ -444,7 +457,8 @@ def _draw_generic_dashboard(p: QPainter, width: int, height: int, title: str, it
     footer_rect = QRectF(14, height - 30, width - 28, 20)
     p.setPen(QColor("#64748B"))
     p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
-    office_str = f"🏢 {office_name} | " if office_name else ""
+    clean_office = strip_leading_emojis(office_name).strip()
+    office_str = f"🏢 {clean_office} | " if clean_office else ""
     p.drawText(footer_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"{office_str}네이버 블로그 공식 포스팅 요약 차트")
 
 
@@ -473,7 +487,7 @@ def render_infographic_card(
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
 
-    clean_title = title.replace("📌 ", "").strip()
+    clean_title = strip_leading_emojis(title).strip()
 
     if zone_data:
         _draw_zone_dashboard(p, width, height, clean_title, zone_name or "정비사업지", zone_data, office_name)

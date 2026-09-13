@@ -30,6 +30,7 @@ from prompts.blog_templates import TONE_PRESETS
 from services.chart_service import extract_summary_items, render_infographic_card, copy_chart_to_clipboard
 from services.gemini_service import GeminiBlogService, clean_body_instructions
 from services.news_search_service import fetch_yonhap_realestate_news
+from services.text_utils import strip_leading_emojis
 from services.zone_map_service import (
     generate_zone_map_image, copy_zone_map_to_clipboard, open_eum_viewer,
     get_zone_data, extract_zone_keyword
@@ -1009,7 +1010,8 @@ class MainWindow(QMainWindow):
         self.combo_titles.blockSignals(True)
         self.combo_titles.clear()
         for t in result["titles"]:
-            self.combo_titles.addItem(f"📌 {t}")
+            clean_t = strip_leading_emojis(t).strip()
+            self.combo_titles.addItem(f"📌 {clean_t}")
         self.combo_titles.blockSignals(False)
 
         # 2. 본문 에디터 반영
@@ -1095,7 +1097,7 @@ class MainWindow(QMainWindow):
         body_text = self.edit_body.toPlainText().strip()
         if not body_text:
             return None
-        current_title = self.combo_titles.currentText().replace("📌 ", "").strip() or "부동산 핵심 체크포인트"
+        current_title = strip_leading_emojis(self.combo_titles.currentText()).strip() or "부동산 핵심 체크포인트"
         office_name = self.config.get("office_name", "").strip()
 
         # 1. AI가 포스팅 생성 시 실시간 자동 수집/추출한 핵심 대시보드 데이터 최우선 활용
@@ -1203,7 +1205,7 @@ class MainWindow(QMainWindow):
 
     def update_preview(self):
         """스마트에디터 ONE 스타일 HTML 미리보기 갱신"""
-        current_title = self.combo_titles.currentText().replace("📌 ", "").strip()
+        current_title = strip_leading_emojis(self.combo_titles.currentText()).strip()
         if not current_title:
             current_title = "공인중개사 추천 매물 브리핑"
         body_text = self.edit_body.toPlainText()
@@ -1226,7 +1228,7 @@ class MainWindow(QMainWindow):
         네이버 스마트에디터 ONE에 맞춘 리치텍스트/HTML + 플레인 텍스트 클립보드 복사
         (플레이스홀더를 제외한 블로그 무관 안내문구 자동 정제)
         """
-        current_title = self.combo_titles.currentText().replace("📌 ", "").strip()
+        current_title = strip_leading_emojis(self.combo_titles.currentText()).strip()
         body_text = clean_body_instructions(self.edit_body.toPlainText())
         tags_text = self.edit_tags.text()
 
@@ -1305,7 +1307,7 @@ class MainWindow(QMainWindow):
 
     def on_copy_plain_text(self):
         """일반 텍스트 복사 (플레이스홀더 제외 안내문구 자동 정제)"""
-        current_title = self.combo_titles.currentText().replace("📌 ", "").strip()
+        current_title = strip_leading_emojis(self.combo_titles.currentText()).strip()
         body_text = clean_body_instructions(self.edit_body.toPlainText())
         tags_text = self.edit_tags.text()
 

@@ -9,6 +9,7 @@ import re
 import urllib.parse
 import urllib.request
 import webbrowser
+from services.text_utils import strip_leading_emojis
 
 # pyrefly: ignore [missing-import]
 from PyQt6.QtCore import QPointF, QRectF, Qt
@@ -233,9 +234,12 @@ def _draw_zone_annotations(
     p.setPen(QPen(QColor(255, 255, 255, 200), 1.2))
     p.drawRoundedRect(badge_rect, 6, 6)
 
+    clean_display = strip_leading_emojis(display_title).strip()
+    clean_office = strip_leading_emojis(office_name).strip()
+
     p.setPen(QColor(255, 255, 255))
     p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-    p.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, f"📍 {display_title}")
+    p.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, f"📍 {clean_display}")
 
     # 4. 상단 헤더 배너
     p.setBrush(QColor(15, 23, 42, 245))
@@ -244,7 +248,7 @@ def _draw_zone_annotations(
 
     p.setPen(QColor(255, 255, 255))
     p.setFont(QFont(FONT_FAMILY, 11, QFont.Weight.Bold))
-    p.drawText(QRectF(14, 0, width - 28, 38), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, f"🗺️ 정비구역 위치도 & 토지이용계획 참조 | {display_title}")
+    p.drawText(QRectF(14, 0, width - 28, 38), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, f"🗺️ 정비구역 위치도 & 토지이용계획 참조 | {clean_display}")
 
     # 5. 하단 푸터 및 범례
     p.setBrush(QColor(15, 23, 42, 235))
@@ -253,8 +257,8 @@ def _draw_zone_annotations(
     p.setPen(QColor(148, 163, 184))
     p.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Normal))
     p.drawText(QRectF(14, height - 30, 360, 30), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "■ 빨간점선: 재개발 정비구역 예정지  ■ 용도: 제2종일반주거지역")
-    if office_name:
-        p.drawText(QRectF(width - 240, height - 30, 226, 30), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"🏢 {office_name}")
+    if clean_office:
+        p.drawText(QRectF(width - 240, height - 30, 226, 30), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"🏢 {clean_office}")
 
 
 def generate_zone_map_image(

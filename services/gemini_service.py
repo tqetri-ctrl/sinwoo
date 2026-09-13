@@ -7,6 +7,7 @@ from prompts.blog_templates import (
 )
 from services.file_parser import extract_text_from_file
 from services.news_search_service import fetch_hybrid_news, format_news_for_prompt
+from services.text_utils import deduplicate_consecutive_emojis
 
 DEFAULT_MODEL = "gemini-3.6-flash"
 SUPPORTED_MODELS = [
@@ -26,12 +27,13 @@ DATE_FORMAT_KOREAN = "%Y년 %m월 %d일"
 
 
 def _format_emoji_instruction(density: str) -> str:
-    """이모지 밀도 옵션 문구 반환"""
+    """이모지 밀도 옵션 문구 반환 (동일 이모지 연속 중복 금지 원칙 포함)"""
+    no_dup = "\n- 이모지 중복 방지 원칙 (필수): 동일한 이모지를 연속(예: '⚡ ⚡', '🔍 🔍', '😊 😊', '✨ ✨')으로 중복 나열하지 마세요. 포인트마다 1개씩만 단독으로 사용하세요."
     if density == "high":
-        return "\n- 이모지 강도: 이모지와 이모티콘을 풍성하고 다채롭게 적극 사용하여 활기찬 느낌을 강조하세요."
+        return "\n- 이모지 강도: 이모지와 이모티콘을 풍성하고 다채롭게 적극 사용하여 활기찬 느낌을 강조하세요." + no_dup
     if density == "low":
-        return "\n- 이모지 강도: 이모지는 소제목이나 핵심 포인트에만 절제하여 최소한으로 깔끔하게 사용하세요."
-    return "\n- 이모지 강도: 각 문단과 포인트마다 읽기 좋고 자연스러운 수준으로 이모지를 배치하세요."
+        return "\n- 이모지 강도: 이모지는 소제목이나 핵심 포인트에만 절제하여 최소한으로 깔끔하게 사용하세요." + no_dup
+    return "\n- 이모지 강도: 각 문단과 포인트마다 읽기 좋고 자연스러운 수준으로 이모지를 배치하세요." + no_dup
 
 
 def _format_office_info(config: dict) -> str:
@@ -85,6 +87,7 @@ def _extract_titles(text: str) -> list:
             line = re.sub(r'^[-*•]\s*', '', line)
             line = line.strip('"\' ')
             if line and len(line) > 5:
+                line = deduplicate_consecutive_emojis(line)
                 titles.append(line)
     return titles[:3] if titles else [DEFAULT_FALLBACK_TITLE]
 
@@ -103,20 +106,24 @@ def _extract_tags(text: str) -> list:
 def clean_body_instructions(text: str) -> str:
     """
     본문에서 플레이스홀더를 제외한 블로그 무관 안내문(조작 지시문 등)을 제거하고
-    플레이스홀더 내부의 복사 안내문구('상단 ... 후 붙여넣기')를 정제
+    플레이스홀더 내부의 복사 안내문구('상단 ... 후 붙여넣기') 및
+    연속 중복 이모지(예: '⚡ ⚡', '🔍 🔍', '😊 😊')를 자동 정제
     """
     if not text:
         return ""
+
+    # 1. 연속 중복 이모지 일괄 정제
+    text = deduplicate_consecutive_emojis(text)
 
     lines = []
     for line in text.splitlines():
         trimmed = line.strip()
 
-        # 1. 독자에게 무의미한 독립된 지도 검색/첨부 안내 라인은 본문에서 완전 제외 (UI 가이드로 이동)
+        # 2. 독자에게 무의미한 독립된 지도 검색/첨부 안내 라인은 본문에서 완전 제외 (UI 가이드로 이동)
         if re.search(r'\[(?:🗺️\s*)?네이버\s*지도\s*첨부\s*추천[^\]]*\]', trimmed):
             continue
 
-        # 2. 플레이스홀더 내부의 복사 지시문 정제: [🗺️ ... 위치도: 상단 ... 후 붙여넣기] -> [🗺️ 위치도]
+        # 3. 플레이스홀더 내부의 복사 지시문 정제: [🗺️ ... 위치도: 상단 ... 후 붙여넣기] -> [🗺️ 위치도]
         cleaned_line = re.sub(
             r'\[(🗺️[^:\]]*위치도)\s*:\s*상단[^\]]*\]',
             r'[\1]',
@@ -125,10 +132,18 @@ def clean_body_instructions(text: str) -> str:
         cleaned_line = re.sub(r'\(상단[^)]*붙여넣기\)', '', cleaned_line)
         cleaned_line = re.sub(r'\[(?:🗺️\s*)?네이버\s*지도\s*첨부\s*추천[^\]]*\]', '', cleaned_line)
 
+        # 4. 플레이스홀더 내부 중복 이모지 방지 (예: [✨ 추천 스티커: ✨ ...] -> [✨ 추천 스티커: ...])
+        cleaned_line = re.sub(
+            r'(\[[^:\]\n]*:\s*)[✨📸📊💡📞🗺️📍]\s*',
+            r'\1',
+            cleaned_line
+        )
+
         if cleaned_line.strip() or not line.strip():
             lines.append(cleaned_line)
 
     result = "\n".join(lines)
+    result = deduplicate_consecutive_emojis(result)
     return re.sub(r'\n{3,}', '\n\n', result).strip()
 
 

@@ -17,9 +17,13 @@ from services.gemini_service import (
     _extract_titles, _extract_body, _extract_tags,
     _extract_dashboard_data, _extract_map_data
 )
-from services.chart_service import render_infographic_card
+from services.chart_service import render_infographic_card, _build_zone_dashboard_metrics, _resolve_progress_bar_text
+from services.text_utils import deduplicate_consecutive_emojis, has_leading_emoji, strip_leading_emojis
 from services.zone_map_service import generate_zone_map_image, extract_zone_keyword
-from ui.styles import generate_blog_preview_html, is_card_news_text, render_card_news_blocks
+from ui.styles import (
+    generate_blog_preview_html, is_card_news_text, render_card_news_blocks,
+    _render_placeholder_box, _render_chart_embed, _render_map_embed
+)
 
 app = QApplication.instance() or QApplication(sys.argv)
 
@@ -264,12 +268,105 @@ def test_card_news_case():
     print("[PASS] test_card_news_case")
 
 
+def test_emoji_deduplication():
+    """프로젝트 전체 이모지 중복 발생 방지 검증"""
+    import re
+
+    # 1. 텍스트 연속 중복 이모지 축약 검증
+    sample_text = "## ⚡ ⚡ 신속통합기획 🔍  🔍 핵심 체크포인트 😊😊 안녕하세요! 🏢 🏢 신우부동산 🏗️ 🏗️ 건설"
+    deduped = deduplicate_consecutive_emojis(sample_text)
+    assert "⚡ ⚡" not in deduped
+    assert "🔍  🔍" not in deduped
+    assert "😊😊" not in deduped
+    assert "🏢 🏢" not in deduped
+    assert "🏗️ 🏗️" not in deduped
+    assert "## ⚡ 신속통합기획" in deduped
+    assert "🔍 핵심 체크포인트" in deduped
+    assert "😊 안녕하세요!" in deduped
+    assert "🏢 신우부동산" in deduped
+    assert "🏗️ 건설" in deduped
+
+    # 2. 선행 이모지 감지 및 제거 검증
+    assert has_leading_emoji("🏢 사업 규모") is True
+    assert has_leading_emoji("사업 규모") is False
+    assert has_leading_emoji("🏘️ 총 건립 세대") is True
+    assert strip_leading_emojis("🏢 🏢 신우부동산") == "신우부동산"
+    assert strip_leading_emojis("✨ 환하게 웃는 스티커") == "환하게 웃는 스티커"
+    assert strip_leading_emojis("📸 거실 전경") == "거실 전경"
+
+    # 3. clean_body_instructions의 플레이스홀더 및 본문 이모지 정제 검증
+    raw_blog_body = """
+    ## ⚡ ⚡ 신속통합기획 추진 현황
+    
+    [✨ 추천 스티커: ✨ 환하게 웃으며 인사하는 스티커]
+    [📸 추천 사진: 📸 단지 조감도 사진]
+    [📊 추천 자료: 📊 사업 추진 일정표]
+    
+    궁금한 점은 문의주세요! 😊 😊
+    """
+    cleaned_body = _extract_body(raw_blog_body)
+    assert "⚡ ⚡" not in cleaned_body
+    assert "😊 😊" not in cleaned_body
+    assert "[✨ 추천 스티커: 환하게 웃으며 인사하는 스티커]" in cleaned_body
+    assert "[📸 추천 사진: 단지 조감도 사진]" in cleaned_body
+    assert "[📊 추천 자료: 사업 추진 일정표]" in cleaned_body
+
+    # 4. 차트 대시보드 4대 지표 카드 중복 아이콘 방지 검증
+    zone_data_with_emojis = {
+        "metrics": [
+            ("🏘️ 단지 세대수", "5,000세대"),
+            ("🛠️ 시공 브랜드", "현대건설"),
+            ("📌 추진 현황", "관리처분인가"),
+            ("📍 사업 면적", "30만㎡"),
+        ]
+    }
+    metrics = _build_zone_dashboard_metrics(zone_data_with_emojis, "관리처분인가")
+    assert metrics[0][0] == "🏘️ 단지 세대수"  # '🏢 🏘️'로 중복 추가되지 않아야 함!
+    assert metrics[1][0] == "🛠️ 시공 브랜드"  # '🏗️ 🛠️'로 중복 추가되지 않아야 함!
+
+    # 5. 프로그레스 바 상태 텍스트 중복 방지 검증
+    p1 = _resolve_progress_bar_text("재개발 매물", "🔑 즉시 입주 가능 (현재 공실)", 100)
+    assert p1 == "🔑 입주 상태: 즉시 입주 가능 (현재 공실)"  # '🔑 입주 상태: 🔑 즉시...' X
+    assert p1.count("🔑") == 1
+
+    p2 = _resolve_progress_bar_text("아파트 단지", "✨ 신축 첫 입주 (준공 완료)", 100)
+    assert p2 == "✨ 신축 첫 입주: 준공 완료" or p2 == "✨ 신축 첫 입주: (준공 완료)" or "준공" in p2
+    assert p2.count("✨") == 1
+
+    p3 = _resolve_progress_bar_text("정책 분석", "✅ 2026년 상반기 전면 적용", 100)
+    assert p3 == "✅ 시행 및 정착 완료: 2026년 상반기 전면 적용"
+    assert p3.count("✅") == 1
+
+    # 6. UI 플레이스홀더 박스 렌더링 시 내부 중복 이모지 정제 검증
+    match_sticker = re.search(r'\[([^\]\r\n]+)\]', '[✨ 추천 스티커: ✨ 박수 치는 캐릭터]')
+    html_sticker = _render_placeholder_box(match_sticker)
+    assert '<span class="icon">✨</span><strong>[네이버 스티커]</strong> 박수 치는 캐릭터' in html_sticker
+    assert "✨ [네이버 스티커] ✨" not in html_sticker
+
+    match_photo = re.search(r'\[([^\]\r\n]+)\]', '[📸 추천 사진: 📸 거실 및 침실 사진]')
+    html_photo = _render_placeholder_box(match_photo)
+    assert '<span class="icon">📸</span><strong>[추천 사진]</strong> 거실 및 침실 사진' in html_photo
+    assert "📸 [추천 사진] 📸" not in html_photo
+
+    # 7. 임베드 카드 타이틀 중복 방지 검증
+    chart_html = _render_chart_embed("📊 한남3구역 인포그래픽 요약")
+    assert "📊 <strong>[핵심 요약 인포그래픽 카드]</strong> - 한남3구역 인포그래픽 요약" in chart_html
+    assert "카드] - 📊" not in chart_html
+
+    map_html = _render_map_embed("🗺️ 정비구역 위치도 및 지적도")
+    assert "🗺️ <strong>[정비구역 / 매물 위치도]</strong> - 정비구역 위치도 및 지적도" in map_html or "🗺️ <strong>[정비구역 / 매물 위치도]</strong> - 지적도" in map_html
+    assert "위치도] - 🗺️" not in map_html
+
+    print("[PASS] test_emoji_deduplication")
+
+
 if __name__ == "__main__":
     print("\n[Running Integration Tests]")
     test_zone_extraction()
     test_hannam_case()
     test_policy_case()
     test_card_news_case()
+    test_emoji_deduplication()
     print("\nALL INTEGRATION TESTS PASSED SUCCESSFULLY!")
 
 
