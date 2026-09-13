@@ -14,18 +14,21 @@ def get_app_dir():
 CONFIG_FILENAME = "blog_maker_config.json"
 
 def get_config_path():
-    """설정 파일(blog_maker_config.json) 경로 탐색 및 반환"""
+    """설정 파일(blog_maker_config.json) 경로 탐색 및 반환 (기존 설정 자동 연동)"""
     app_dir = get_app_dir()
     direct_path = os.path.join(app_dir, CONFIG_FILENAME)
 
-    # 1. 패키징된 실행 파일(.exe)인 경우 무조건 자신의 폴더에 있는 설정만 참조 (API 키 및 개인정보 유출 방지)
-    if getattr(sys, 'frozen', False):
-        return direct_path
-
-    # 2. 개발 환경(파이썬 스크립트 실행)에서만 작업 디렉토리 등 확인
+    # 1. 실행 파일(.exe) 또는 스크립트와 동일한 폴더에 설정 파일이 있는 경우 최우선 사용
     if os.path.exists(direct_path):
         return direct_path
 
+    # 2. 실행 폴더에 없더라도 상위 디렉토리(프로젝트 루트 등)에 기존 설정이 있는 경우 자동 연동
+    parent_dir = os.path.dirname(app_dir)
+    parent_path = os.path.join(parent_dir, CONFIG_FILENAME)
+    if os.path.exists(parent_path):
+        return parent_path
+
+    # 3. 현재 작업 디렉토리(CWD) 확인
     cwd_path = os.path.join(os.getcwd(), CONFIG_FILENAME)
     if os.path.exists(cwd_path):
         return cwd_path
