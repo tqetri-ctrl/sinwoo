@@ -231,8 +231,14 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
 
     step_y = 88
     p.setPen(QColor("#334155"))
-    p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-    step_label = "🚀 사업 추진 단계 로드맵" if any(k in cat_title for k in ("정비", "재개발", "재건축")) else "🎯 정책 시행 및 추진 로드맵"
+    if any(k in cat_title for k in ("정비", "재개발", "재건축", "모아타운", "뉴타운")):
+        step_label = "🚀 사업 추진 단계 로드맵"
+    elif any(k in cat_title for k in ("교통", "철도", "노선", "GTX", "지하철", "도로", "트램", "인프라")):
+        step_label = "🚆 노선 및 인프라 개통 로드맵"
+    elif any(k in cat_title for k in ("매물", "단지", "아파트", "분양", "입주")):
+        step_label = "🏠 단지 추진 및 입주 진행률"
+    else:
+        step_label = "🎯 정책 시행 및 추진 로드맵"
     p.drawText(QRectF(14, step_y, width - 28, 18), Qt.AlignmentFlag.AlignLeft, step_label)
 
     bar_y = step_y + 22
