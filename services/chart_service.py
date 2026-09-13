@@ -231,12 +231,25 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
 
     step_y = 88
     p.setPen(QColor("#334155"))
-    if any(k in cat_title for k in ("정비", "재개발", "재건축", "모아타운", "뉴타운")):
-        step_label = "🚀 사업 추진 단계 로드맵"
-    elif any(k in cat_title for k in ("교통", "철도", "노선", "GTX", "지하철", "도로", "트램", "인프라")):
+    is_prop = any(k in cat_title for k in ("매물", "단지", "아파트", "빌라", "오피스텔", "주택", "룸투어"))
+    is_redev = any(k in cat_title for k in ("정비", "재개발", "재건축", "모아타운", "뉴타운", "입주권"))
+    is_infra = any(k in cat_title for k in ("교통", "철도", "노선", "GTX", "지하철", "도로", "트램", "인프라"))
+
+    progress_val = zone_data.get("progress", 70)
+    stage_text = zone_data.get("stage", "사업시행인가 완료")
+
+    if is_redev:
+        step_label = "🚀 정비사업 추진 단계 로드맵"
+    elif is_infra:
         step_label = "🚆 노선 및 인프라 개통 로드맵"
-    elif any(k in cat_title for k in ("매물", "단지", "아파트", "분양", "입주")):
-        step_label = "🏠 단지 추진 및 입주 진행률"
+    elif is_prop:
+        if progress_val >= 100:
+            if any(k in stage_text for k in ("신축", "첫 입주", "미입주")):
+                step_label = "✨ 신축 분양/준공 완료 현황"
+            else:
+                step_label = "🔑 매물 점유 상태 및 입주 가능 시기"
+        else:
+            step_label = "🏗️ 단지 공정률 및 입주 예정 일정"
     else:
         step_label = "🎯 정책 시행 및 추진 로드맵"
     p.drawText(QRectF(14, step_y, width - 28, 18), Qt.AlignmentFlag.AlignLeft, step_label)
@@ -247,8 +260,6 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
     p.setPen(Qt.PenStyle.NoPen)
     p.drawRoundedRect(bar_rect, 12, 12)
 
-    progress_val = zone_data.get("progress", 70)
-    stage_text = zone_data.get("stage", "사업시행인가 완료")
     fill_w = max(90.0, (width - 28) * (progress_val / 100.0))
     fill_rect = QRectF(14, bar_y, fill_w, 24)
     fill_grad = QLinearGradient(14, bar_y, 14 + fill_w, bar_y)
@@ -259,7 +270,17 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
 
     p.setPen(QColor("#FFFFFF"))
     p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-    p.drawText(fill_rect, Qt.AlignmentFlag.AlignCenter, f"현재 진행률: {progress_val}% ({stage_text})")
+    if is_prop and progress_val >= 100:
+        if any(k in stage_text for k in ("신축", "첫 입주", "미입주")):
+            bar_text = f"✨ 신축 첫 입주: {stage_text} (준공 완료)"
+        else:
+            clean_stage = stage_text if stage_text else "즉시 입주 가능"
+            bar_text = f"🔑 입주 상태: {clean_stage}"
+    elif progress_val >= 100:
+        bar_text = f"✅ 시행 및 정착 완료: {stage_text}"
+    else:
+        bar_text = f"현재 진행률: {progress_val}% ({stage_text})"
+    p.drawText(fill_rect, Qt.AlignmentFlag.AlignCenter, bar_text)
 
     grid_y = 144
     box_w = (width - 36) / 2
