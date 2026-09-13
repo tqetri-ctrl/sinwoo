@@ -205,56 +205,43 @@ def _build_zone_dashboard_metrics(zone_data: dict, stage_text: str) -> list:
     ]
 
 
-def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_name: str, zone_data: dict, office_name: str):
-    """정비사업 구역 데이터 자동 수집 대시보드 (진행률 로드맵 + 4대 지표)"""
-    card_rect = QRectF(2, 2, width - 4, height - 4)
-    p.setBrush(QColor("#F8FAFC"))
-    p.setPen(QPen(QColor("#CBD5E1"), 1.2))
-    p.drawRoundedRect(card_rect, 12, 12)
-
-    banner_rect = QRectF(12, 12, width - 24, 68)
-    p.setBrush(QColor("#1E3A8A"))
-    p.setPen(Qt.PenStyle.NoPen)
-    p.drawRoundedRect(banner_rect, 8, 8)
-
+def _resolve_zone_banner_title(zone_data: dict, zone_name: str) -> str:
+    """대시보드 상단 배너 타이틀 결정"""
     cat_title = zone_data.get("category")
     if not cat_title:
-        cat_title = f"정비사업 핵심 지표 대시보드 | {zone_name}" if zone_name else "부동산 핵심 분석 대시보드"
-    elif zone_name and zone_name not in cat_title:
-        cat_title = f"{cat_title} | {zone_name}"
+        return f"정비사업 핵심 지표 대시보드 | {zone_name}" if zone_name else "부동산 핵심 분석 대시보드"
+    if zone_name and zone_name not in cat_title:
+        return f"{cat_title} | {zone_name}"
+    return cat_title
 
-    p.setPen(QColor("#93C5FD"))
-    p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"📊 {cat_title}")
 
-    _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
-
-    step_y = 88
-    p.setPen(QColor("#334155"))
-    is_prop = any(k in cat_title for k in ("매물", "단지", "아파트", "빌라", "오피스텔", "주택", "룸투어"))
-    is_redev = any(k in cat_title for k in ("정비", "재개발", "재건축", "모아타운", "뉴타운", "입주권"))
-    is_infra = any(k in cat_title for k in ("교통", "철도", "노선", "GTX", "지하철", "도로", "트램", "인프라"))
-
-    progress_val = zone_data.get("progress", 70)
-    stage_text = zone_data.get("stage", "사업시행인가 완료")
-
-    if is_redev:
-        step_label = "🚀 정비사업 추진 단계 로드맵"
-    elif is_infra:
-        step_label = "🚆 노선 및 인프라 개통 로드맵"
-    elif is_prop:
+def _resolve_step_label(cat_title: str, stage_text: str, progress_val: int) -> str:
+    """로드맵 상단 타이틀 라벨 결정"""
+    if any(k in cat_title for k in ("정비", "재개발", "재건축", "모아타운", "뉴타운", "입주권")):
+        return "🚀 정비사업 추진 단계 로드맵"
+    if any(k in cat_title for k in ("교통", "철도", "노선", "GTX", "지하철", "도로", "트램", "인프라")):
+        return "🚆 노선 및 인프라 개통 로드맵"
+    if any(k in cat_title for k in ("매물", "단지", "아파트", "빌라", "오피스텔", "주택", "룸투어")):
         if progress_val >= 100:
-            if any(k in stage_text for k in ("신축", "첫 입주", "미입주")):
-                step_label = "✨ 신축 분양/준공 완료 현황"
-            else:
-                step_label = "🔑 매물 점유 상태 및 입주 가능 시기"
-        else:
-            step_label = "🏗️ 단지 공정률 및 입주 예정 일정"
-    else:
-        step_label = "🎯 정책 시행 및 추진 로드맵"
-    p.drawText(QRectF(14, step_y, width - 28, 18), Qt.AlignmentFlag.AlignLeft, step_label)
+            return "✨ 신축 분양/준공 완료 현황" if any(k in stage_text for k in ("신축", "첫 입주", "미입주")) else "🔑 매물 점유 상태 및 입주 가능 시기"
+        return "🏗️ 단지 공정률 및 입주 예정 일정"
+    return "🎯 정책 시행 및 추진 로드맵"
 
-    bar_y = step_y + 22
+
+def _resolve_progress_bar_text(cat_title: str, stage_text: str, progress_val: int) -> str:
+    """프로그레스 바 내부 상태 텍스트 결정"""
+    is_prop = any(k in cat_title for k in ("매물", "단지", "아파트", "빌라", "오피스텔", "주택", "룸투어"))
+    is_new = any(k in stage_text for k in ("신축", "첫 입주", "미입주"))
+
+    if is_prop and progress_val >= 100:
+        return f"✨ 신축 첫 입주: {stage_text} (준공 완료)" if is_new else f"🔑 입주 상태: {stage_text or '즉시 입주 가능'}"
+    if progress_val >= 100:
+        return f"✅ 시행 및 정착 완료: {stage_text}"
+    return f"현재 진행률: {progress_val}% ({stage_text})"
+
+
+def _draw_roadmap_progress_bar(p: QPainter, width: int, bar_y: int, progress_val: int, bar_text: str):
+    """대시보드 프로그레스 바 및 텍스트 렌더링"""
     bar_rect = QRectF(14, bar_y, width - 28, 24)
     p.setBrush(QColor("#E2E8F0"))
     p.setPen(Qt.PenStyle.NoPen)
@@ -270,24 +257,12 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
 
     p.setPen(QColor("#FFFFFF"))
     p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-    if is_prop and progress_val >= 100:
-        if any(k in stage_text for k in ("신축", "첫 입주", "미입주")):
-            bar_text = f"✨ 신축 첫 입주: {stage_text} (준공 완료)"
-        else:
-            clean_stage = stage_text if stage_text else "즉시 입주 가능"
-            bar_text = f"🔑 입주 상태: {clean_stage}"
-    elif progress_val >= 100:
-        bar_text = f"✅ 시행 및 정착 완료: {stage_text}"
-    else:
-        bar_text = f"현재 진행률: {progress_val}% ({stage_text})"
     p.drawText(fill_rect, Qt.AlignmentFlag.AlignCenter, bar_text)
 
-    grid_y = 144
+
+def _draw_2x2_metrics_grid(p: QPainter, width: int, grid_y: int, metrics: list, box_h: int = 94, val_h: int = 54):
+    """2x2 메트릭 카드 그리드 렌더링"""
     box_w = (width - 36) / 2
-    box_h = 94
-
-    metrics = _build_zone_dashboard_metrics(zone_data, stage_text)
-
     for idx, (label, val, text_color, bg_color, border_color) in enumerate(metrics):
         r = idx // 2
         c = idx % 2
@@ -303,7 +278,41 @@ def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_
         p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
         p.drawText(QRectF(bx + 10, by + 8, box_w - 20, 20), Qt.AlignmentFlag.AlignLeft, label)
 
-        _draw_fitted_metric_value(p, QRectF(bx + 10, by + 30, box_w - 20, 54), val)
+        _draw_fitted_metric_value(p, QRectF(bx + 10, by + 30, box_w - 20, val_h), val)
+
+
+def _draw_zone_dashboard(p: QPainter, width: int, height: int, title: str, zone_name: str, zone_data: dict, office_name: str):
+    """정비사업 및 부동산 분석 데이터 자동 수집 대시보드"""
+    card_rect = QRectF(2, 2, width - 4, height - 4)
+    p.setBrush(QColor("#F8FAFC"))
+    p.setPen(QPen(QColor("#CBD5E1"), 1.2))
+    p.drawRoundedRect(card_rect, 12, 12)
+
+    banner_rect = QRectF(12, 12, width - 24, 68)
+    p.setBrush(QColor("#1E3A8A"))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.drawRoundedRect(banner_rect, 8, 8)
+
+    cat_title = _resolve_zone_banner_title(zone_data, zone_name)
+    p.setPen(QColor("#93C5FD"))
+    p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+    p.drawText(QRectF(24, 20, width - 48, 18), Qt.AlignmentFlag.AlignLeft, f"📊 {cat_title}")
+    _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
+
+    progress_val = zone_data.get("progress", 70)
+    stage_text = zone_data.get("stage", "사업시행인가 완료")
+    step_label = _resolve_step_label(cat_title, stage_text, progress_val)
+    bar_text = _resolve_progress_bar_text(cat_title, stage_text, progress_val)
+
+    step_y = 88
+    p.setPen(QColor("#334155"))
+    p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
+    p.drawText(QRectF(14, step_y, width - 28, 18), Qt.AlignmentFlag.AlignLeft, step_label)
+
+    _draw_roadmap_progress_bar(p, width, step_y + 22, progress_val, bar_text)
+
+    metrics = _build_zone_dashboard_metrics(zone_data, stage_text)
+    _draw_2x2_metrics_grid(p, width, 144, metrics, box_h=94, val_h=54)
 
     footer_rect = QRectF(14, height - 30, width - 28, 20)
     p.setPen(QColor("#64748B"))
@@ -332,7 +341,6 @@ def _draw_property_dashboard(p: QPainter, width: int, height: int, title: str, p
     _draw_fitted_title(p, QRectF(24, 38, width - 48, 36), title)
 
     grid_y = 90
-    box_w = (width - 36) / 2
     box_h = 92
 
     deal_type = prop_info.get("deal_type", "매매")
@@ -344,23 +352,7 @@ def _draw_property_dashboard(p: QPainter, width: int, height: int, title: str, p
         ("📍 소재지 위치", prop_info.get("location", "상세 위치 문의"), "#7C3AED", "#F5F3FF", "#DDD6FE"),
     ]
 
-
-    for idx, (label, val, text_color, bg_color, border_color) in enumerate(metrics):
-        r = idx // 2
-        c = idx % 2
-        bx = 14 + c * (box_w + 8)
-        by = grid_y + r * (box_h + 8)
-        b_rect = QRectF(bx, by, box_w, box_h)
-
-        p.setBrush(QColor(bg_color))
-        p.setPen(QPen(QColor(border_color), 1.2))
-        p.drawRoundedRect(b_rect, 8, 8)
-
-        p.setPen(QColor(text_color))
-        p.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
-        p.drawText(QRectF(bx + 10, by + 8, box_w - 20, 20), Qt.AlignmentFlag.AlignLeft, label)
-
-        _draw_fitted_metric_value(p, QRectF(bx + 10, by + 30, box_w - 20, 52), val)
+    _draw_2x2_metrics_grid(p, width, grid_y, metrics, box_h=box_h, val_h=52)
 
     feat = prop_info.get("features", "")
     if feat:
